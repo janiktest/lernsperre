@@ -2,6 +2,12 @@
 
 Jede Version hat eine Zeile **Nach dem Update**: was du nach dem Installieren der neuen .deb tun musst.
 
+## 0.2.3 – 23.11.2026
+
+**Nach dem Update:** `systemctl --user restart lernsperre` reicht (oder im Panel-Menü „Dienst neu starten“), kein Ab- und Anmelden nötig.
+
+- Karten werden wieder genau gezählt, auch wenn Anki offen ist. Ein Deck öffnen zählt nicht mehr mit, Rückgängig zieht eine Antwort wieder ab. Dafür liest LernSperre während der Sperre eine Kopie der Anki-Sammlung in `~/.cache/lernsperre`. Die Kopie wird nie zurückgeschrieben und nach der Sperre gelöscht, Ankis Dateien und die Synchronisierung bleiben unberührt.
+
 ## 0.2.2 – 23.11.2026
 
 **Nach dem Update:** `systemctl --user restart lernsperre` reicht (oder im Panel-Menü „Dienst neu starten“), kein Ab- und Anmelden nötig.
