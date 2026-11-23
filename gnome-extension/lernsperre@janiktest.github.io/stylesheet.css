@@ -1,0 +1,60 @@
+.lernsperre-overlay {
+  background-color: rgba(20, 20, 28, 0.94);
+}
+
+.lernsperre-box {
+  spacing: 18px;
+  padding: 40px 56px;
+  border-radius: 24px;
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.lernsperre-title {
+  font-size: 32px;
+  font-weight: bold;
+  color: #ffffff;
+  text-align: center;
+}
+
+.lernsperre-text {
+  font-size: 18px;
+  color: #d8d8e0;
+  text-align: center;
+}
+
+.lernsperre-time {
+  font-size: 48px;
+  font-weight: bold;
+  color: #8fb8ff;
+  text-align: center;
+}
+
+.lernsperre-button {
+  font-size: 18px;
+  padding: 12px 28px;
+  border-radius: 999px;
+  background-color: #3584e4;
+  color: #ffffff;
+}
+
+.lernsperre-button:hover {
+  background-color: #4a94f0;
+}
+
+.lernsperre-panel-locked {
+  color: #ff9a8a;
+}
+
+.lernsperre-panel-warn {
+  color: #ffd27a;
+}
+
+.lernsperre-emergency {
+  font-size: 13px;
+  padding: 4px 12px;
+  color: #9a9aa8;
+}
+
+.lernsperre-emergency:hover {
+  color: #ffffff;
+}
