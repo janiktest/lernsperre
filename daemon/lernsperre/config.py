@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -28,17 +29,13 @@ warn_seconds = 60
 
 # --- Entsperren durch Lernen in Anki -----------------------------------------
 
-# Wie wird entsperrt?
-#   "time"  = nach einer Lernzeit (learn_minutes)
-#   "cards" = nach einer Anzahl beantworteter Karten (min_cards), ohne Zeitvorgabe
-#   "both"  = erst wenn beides erreicht ist
-unlock_mode = "time"
-
-# Lernzeit zum Entsperren (Minuten), gilt bei "time" und "both"
-learn_minutes = 5
-
-# Mindestanzahl beantworteter Karten, gilt bei "cards" und "both"
-min_cards = 20
+# Es zählt, was hier NICHT auskommentiert ist (# davor = aus):
+#   nur learn_minutes  -> entsperrt nach der Lernzeit
+#   nur min_cards      -> entsperrt nach so vielen beantworteten Karten, ohne Zeitvorgabe
+#   beide              -> entsperrt erst, wenn beides erreicht ist
+#   keins von beiden   -> Standard: 5 Minuten Lernzeit
+learn_minutes = 5      # Lernzeit in Minuten
+# min_cards = 20       # Mindestanzahl beantworteter Karten
 
 # Lernzeit zählt nur, wenn Anki vorne ist und die letzte beantwortete Karte
 # höchstens so viele Sekunden her ist (sonst pausiert die Lernzeit)
@@ -129,12 +126,11 @@ class Target:
 @dataclass
 class Config:
     allowed_minutes: float = 20
-    learn_minutes: float = 5
+    learn_minutes: float | None = 5  # None = Lernzeit zählt nicht
     warn_seconds: float = 60
     idle_seconds: float = 60
     pause_media_on_lock: bool = True
-    unlock_mode: str = "time"
-    min_cards: int = 20
+    min_cards: int | None = None  # None = Kartenzahl zählt nicht
     pause_minutes: list[int] = field(default_factory=lambda: [15, 30, 60])
     icon_free: str = "⏳"
     icon_locked: str = "🔒"
@@ -155,15 +151,14 @@ class Config:
 
     @property
     def learn_seconds(self) -> float:
-        return max(1.0, self.learn_minutes * 60)
+        return max(1.0, self.learn_minutes * 60) if self.learn_minutes is not None else 0.0
 
     @property
-    def needs_time(self) -> bool:
-        return self.unlock_mode in ("time", "both")
-
-    @property
-    def needs_cards(self) -> bool:
-        return self.unlock_mode in ("cards", "both")
+    def unlock_mode(self) -> str:
+        """"time", "cards" oder "both" – je nachdem, was in der Datei steht."""
+        if self.learn_minutes is not None and self.min_cards is not None:
+            return "both"
+        return "cards" if self.min_cards is not None else "time"
 
 
 def parse_config(text: str) -> Config:
@@ -180,16 +175,18 @@ def parse_config(text: str) -> Config:
     cfg = Config(targets=targets)
     for key in (
         "allowed_minutes", "learn_minutes", "warn_seconds", "idle_seconds",
-        "pause_media_on_lock", "unlock_mode", "min_cards", "pause_minutes",
+        "pause_media_on_lock", "pause_minutes",
         "icon_free", "icon_locked", "icon_paused", "icon_learning",
         "icon_learning_paused", "show_time", "editor",
         "anki_app_ids", "anki_desktop_id", "anki_collection", "anki_launch",
     ):
         if key in raw:
             setattr(cfg, key, raw[key])
-    if cfg.unlock_mode not in ("time", "cards", "both"):
-        raise ValueError(f'unlock_mode muss "time", "cards" oder "both" sein, nicht "{cfg.unlock_mode}"')
-    cfg.min_cards = max(1, int(cfg.min_cards))
+    # Entsperren: was in der Datei steht, zählt. Steht keins von beiden da: 5 min.
+    cfg.learn_minutes = float(raw["learn_minutes"]) if "learn_minutes" in raw else None
+    cfg.min_cards = max(1, int(raw["min_cards"])) if "min_cards" in raw else None
+    if cfg.learn_minutes is None and cfg.min_cards is None:
+        cfg.learn_minutes = 5.0
     cfg.pause_minutes = [int(m) for m in cfg.pause_minutes if int(m) > 0]
     return cfg
 
@@ -200,7 +197,8 @@ def add_missing_options(text: str) -> str:
     Die Zeilen kommen vor die erste Tabelle ([[targets]]), damit sie in TOML
     nicht zu einem Ziel gehören. Eigene Werte bleiben unverändert.
     """
-    present = set(tomllib.loads(text))
+    # learn_minutes/min_cards darf man absichtlich auskommentieren
+    present = set(tomllib.loads(text)) | {"learn_minutes", "min_cards"}
     default_lines = DEFAULT_CONFIG.split("[[targets]]")[0].splitlines()
     missing = []
     for i, line in enumerate(default_lines):
@@ -222,13 +220,51 @@ def add_missing_options(text: str) -> str:
     return text.rstrip("\n") + "\n\n" + block
 
 
+_OLD_UNLOCK_COMMENTS = {
+    "# Wie wird entsperrt?",
+    '#   "time"  = nach einer Lernzeit (learn_minutes)',
+    '#   "cards" = nach einer Anzahl beantworteter Karten (min_cards), ohne Zeitvorgabe',
+    '#   "both"  = erst wenn beides erreicht ist',
+    '# Lernzeit zum Entsperren (Minuten), gilt bei "time" und "both"',
+    '# Mindestanzahl beantworteter Karten, gilt bei "cards" und "both"',
+}
+UNLOCK_HELP = [line for line in DEFAULT_CONFIG.splitlines() if line.startswith("#")
+               and ("NICHT auskommentiert" in line or "->" in line)]
+
+
+def migrate_unlock_mode(text: str) -> str:
+    """Wandelt das alte `unlock_mode` (0.2.0) um: Nicht benutztes wird auskommentiert."""
+    raw = tomllib.loads(text)
+    if "unlock_mode" not in raw:
+        return text
+    mode = raw["unlock_mode"]
+    off = {"time": "min_cards", "cards": "learn_minutes"}.get(mode)
+    out: list[str] = []
+    inserted = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if re.match(r"^unlock_mode\s*=", stripped) or stripped in _OLD_UNLOCK_COMMENTS:
+            continue
+        key = re.match(r"^#?\s*(learn_minutes|min_cards)\s*=", stripped)
+        if key and not inserted:
+            out += UNLOCK_HELP
+            inserted = True
+        if key and key.group(1) == off and not stripped.startswith("#"):
+            line = "# " + line
+        if key and out and out[-1] == "" and re.match(r"^#?\s*(learn_minutes|min_cards)\s*=", out[-2] if len(out) > 1 else ""):
+            out.pop()  # beide direkt untereinander
+        out.append(line)
+    result = re.sub(r"\n{3,}", "\n\n", "\n".join(out)) + "\n"
+    return result
+
+
 def load_config(path: Path = CONFIG_FILE) -> Config:
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(DEFAULT_CONFIG, encoding="utf-8")
     text = path.read_text(encoding="utf-8")
     cfg = parse_config(text)  # Fehler erst melden, bevor etwas geändert wird
-    updated = add_missing_options(text)
+    updated = add_missing_options(migrate_unlock_mode(text))
     if updated != text:
         path.write_text(updated, encoding="utf-8")
         cfg = parse_config(updated)

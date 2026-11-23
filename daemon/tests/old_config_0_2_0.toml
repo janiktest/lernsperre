@@ -1,0 +1,103 @@
+# LernSperre – Einstellungen
+# Änderungen werden nach dem Speichern automatisch übernommen.
+# Anleitung: https://github.com/janiktest/lernsperre/blob/main/docs/ANLEITUNG.md
+#
+# LernSperre ist ein unabhängiges Projekt und nicht mit Anki oder Ankitects verbunden.
+
+# --- Zeit zum Schauen -------------------------------------------------------
+
+# Erlaubte Zeit auf Zielen, bis gesperrt wird (Minuten)
+allowed_minutes = 20
+
+# Warnung so viele Sekunden vor der Sperre (0 = aus)
+warn_seconds = 60
+
+# --- Entsperren durch Lernen in Anki -----------------------------------------
+
+# Wie wird entsperrt?
+#   "time"  = nach einer Lernzeit (learn_minutes)
+#   "cards" = nach einer Anzahl beantworteter Karten (min_cards), ohne Zeitvorgabe
+#   "both"  = erst wenn beides erreicht ist
+unlock_mode = "time"
+
+# Lernzeit zum Entsperren (Minuten), gilt bei "time" und "both"
+learn_minutes = 5
+
+# Mindestanzahl beantworteter Karten, gilt bei "cards" und "both"
+min_cards = 20
+
+# Lernzeit zählt nur, wenn Anki vorne ist und die letzte beantwortete Karte
+# höchstens so viele Sekunden her ist (sonst pausiert die Lernzeit)
+idle_seconds = 60
+
+# Während der Sperre laufende Wiedergabe (Video/Musik) pausieren
+pause_media_on_lock = true
+
+# --- Pausieren ---------------------------------------------------------------
+
+# Auswahl im Menü „Pausieren“ (Minuten). Während einer Sperre geht Pausieren nicht.
+pause_minutes = [15, 30, 60]
+
+# --- Anzeige oben im Panel ---------------------------------------------------
+
+icon_free = "⏳"              # normal, mit verbleibender Zeit
+icon_locked = "🔒"            # Sperre aktiv
+icon_paused = "☕"            # pausiert
+icon_learning = "▶"           # Lernzeit läuft gerade
+icon_learning_paused = "⏸"    # Lernzeit wartet (Anki nicht vorne / keine Antwort)
+show_time = true              # Zeit neben dem Emoji anzeigen
+
+# --- Sonstiges ---------------------------------------------------------------
+
+# Programm zum Öffnen dieser Datei über „Einstellungen“, z. B. "gedit"
+# oder "gnome-text-editor". Leer = Standard-Texteditor.
+editor = ""
+
+# Woran das Anki-Fenster erkannt wird (App-ID / WM_CLASS, Teilstring, ohne Groß/klein)
+anki_app_ids = ["net.ankiweb.Anki", "anki"]
+
+# Welches Anki gestartet wird. Alle Installationen zeigt `lernsperre detect-ankis`,
+# auswählen mit `lernsperre use-anki N`.
+# Leer = über anki_desktop_id. Sonst ein Befehl (z. B. "flatpak run net.ankiweb.Anki"),
+# ein Programm (z. B. "/usr/local/bin/anki") oder ein Ordner, in dem Anki liegt.
+anki_launch = ""
+
+# Desktop-Datei zum Starten von Anki (wenn anki_launch leer ist)
+anki_desktop_id = "net.ankiweb.Anki.desktop"
+
+# Pfad zu collection.anki2. Leer = automatisch suchen (Flatpak und normale Installation)
+anki_collection = ""
+
+# Ziele: ein Ziel passt, wenn der Fenstertitel einen der `titles` enthält,
+# die App-ID / WM_CLASS einen der `apps` enthält oder die Adresse eine der `urls`.
+# Titel mit "re:" am Anfang sind reguläre Ausdrücke.
+
+[[targets]]
+name = "YouTube"
+titles = ["YouTube"]
+urls = ["youtube.com", "youtu.be"]
+
+[[targets]]
+name = "Instagram"
+titles = ["Instagram"]
+urls = ["instagram.com"]
+
+[[targets]]
+name = "TikTok"
+titles = ["TikTok"]
+urls = ["tiktok.com"]
+
+[[targets]]
+name = "Netflix"
+titles = ["Netflix"]
+urls = ["netflix.com"]
+
+[[targets]]
+name = "Reddit"
+titles = ["Reddit"]
+urls = ["reddit.com"]
+
+[[targets]]
+name = "X/Twitter"
+titles = ["re:/ X( [—-] |$)", "re:\bTwitter\b"]
+urls = ["x.com", "twitter.com"]

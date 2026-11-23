@@ -84,13 +84,19 @@ Hinweis: Firefox zeigt im Fenstertitel nur den **aktiven Tab**. Ein YouTube-Tab 
 
 ### Wie du entsperrst
 
-Das legst du in den Einstellungen mit `unlock_mode` fest:
+In den Einstellungen stehen `learn_minutes` und `min_cards` direkt untereinander. **Es zählt, was nicht auskommentiert ist** (`#` am Zeilenanfang = aus):
 
-| `unlock_mode` | Entsperrt, wenn … |
+```toml
+learn_minutes = 5      # Lernzeit in Minuten
+# min_cards = 20       # Mindestanzahl beantworteter Karten
+```
+
+| In der Datei aktiv | Entsperrt, wenn … |
 | --- | --- |
-| `"time"` (Standard) | du `learn_minutes` lang gelernt hast. Die Lernzeit läuft nur, solange Anki vorne ist und du Karten beantwortest. Nach `idle_seconds` (60 s) ohne Antwort wartet sie. |
-| `"cards"` | du `min_cards` Karten beantwortet hast, egal wie lange es dauert. Antworten vom Handy (AnkiDroid/AnkiMobile) zählen auch, sobald sie synchronisiert sind. |
-| `"both"` | beides erreicht ist |
+| nur `learn_minutes` (Standard) | du so lange gelernt hast. Die Lernzeit läuft nur, solange Anki vorne ist und du Karten beantwortest. Nach `idle_seconds` (60 s) ohne Antwort wartet sie. |
+| nur `min_cards` | du so viele Karten beantwortet hast, egal wie lange es dauert. Antworten vom Handy (AnkiDroid/AnkiMobile) zählen auch, sobald sie synchronisiert sind. |
+| beide | beides erreicht ist |
+| keins von beiden | Standard: 5 Minuten Lernzeit |
 
 Gezählt wird nur, was nach Beginn der Sperre beantwortet wurde. LernSperre liest dafür nur lesend in deiner Anki-Sammlung (Tabelle `revlog`). Es wird kein Anki-Add-on gebraucht und nichts in Anki verändert.
 
@@ -108,9 +114,8 @@ Menü → **Einstellungen** öffnet `~/.config/lernsperre/config.toml` im Texted
 | --- | --- | --- |
 | `allowed_minutes` | `20` | erlaubte Zeit auf Zielen bis zur Sperre |
 | `warn_seconds` | `60` | Warnung so viele Sekunden vorher (`0` = aus) |
-| `unlock_mode` | `"time"` | `"time"`, `"cards"` oder `"both"` (siehe oben) |
-| `learn_minutes` | `5` | Lernzeit zum Entsperren |
-| `min_cards` | `20` | Mindestanzahl Karten zum Entsperren |
+| `learn_minutes` | `5` | Lernzeit zum Entsperren (auskommentieren = zählt nicht, siehe oben) |
+| `min_cards` | auskommentiert | Mindestanzahl Karten zum Entsperren (aktiv = zählt) |
 | `idle_seconds` | `60` | Lernzeit wartet, wenn so lange keine Karte beantwortet wurde |
 | `pause_media_on_lock` | `true` | Wiedergabe bei der Sperre pausieren |
 | `pause_minutes` | `[15, 30, 60]` | Auswahl im Menü „Pausieren“ |
