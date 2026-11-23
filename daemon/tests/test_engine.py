@@ -140,7 +140,7 @@ def test_no_pause_while_locked_and_lock_clears_pause():
 
 
 def test_cards_mode_unlocks_by_card_count_without_time():
-    e = Engine(cfg_with(unlock_mode="cards", min_cards=3))
+    e = Engine(cfg_with(learn_minutes=None, min_cards=3))
     e.lock(0)
     e.tick(1, 1, Signals(windows=[TERM], cards_since_lock=2))
     assert e.state.mode == "locked"
@@ -148,7 +148,7 @@ def test_cards_mode_unlocks_by_card_count_without_time():
 
 
 def test_both_mode_needs_time_and_cards():
-    e = Engine(cfg_with(unlock_mode="both", min_cards=2, learn_minutes=1))
+    e = Engine(cfg_with(min_cards=2, learn_minutes=1))
     e.lock(0)
     run(e, Signals(windows=[ANKI], cards_since_lock=5), 30, start=1, last_answer_fn=lambda n: n)
     assert e.state.mode == "locked"  # Karten reichen, Zeit noch nicht
@@ -156,10 +156,32 @@ def test_both_mode_needs_time_and_cards():
     assert ("unlocked",) in events
 
 
-def test_invalid_unlock_mode_rejected():
-    import pytest
-    with pytest.raises(ValueError):
-        parse_config('unlock_mode = "egal"\n')
+def test_unlock_mode_follows_uncommented_options():
+    assert parse_config("learn_minutes = 3\n").unlock_mode == "time"
+    assert parse_config("# learn_minutes = 3\nmin_cards = 7\n").unlock_mode == "cards"
+    both = parse_config("learn_minutes = 3\nmin_cards = 7\n")
+    assert both.unlock_mode == "both" and both.min_cards == 7
+    none = parse_config("# learn_minutes = 3\n# min_cards = 7\n")
+    assert none.unlock_mode == "time" and none.learn_minutes == 5  # Standard
+
+
+def test_commented_out_options_are_not_added_back():
+    from lernsperre.config import add_missing_options
+    text = DEFAULT_CONFIG.replace("learn_minutes = 5 ", "# learn_minutes = 5 ").replace("# min_cards = 20", "min_cards = 20")
+    assert add_missing_options(text) == text
+    assert parse_config(text).unlock_mode == "cards"
+
+
+def test_migrate_0_2_0_unlock_mode():
+    from pathlib import Path
+    from lernsperre.config import add_missing_options, migrate_unlock_mode
+    old = (Path(__file__).parent / "old_config_0_2_0.toml").read_text()
+    for mode, expected in [("time", "time"), ("cards", "cards"), ("both", "both")]:
+        text = add_missing_options(migrate_unlock_mode(old.replace('unlock_mode = "time"', f'unlock_mode = "{mode}"')))
+        cfg = parse_config(text)
+        assert "unlock_mode" not in text and cfg.unlock_mode == expected
+        assert len(cfg.targets) == 6
+    assert migrate_unlock_mode(DEFAULT_CONFIG) == DEFAULT_CONFIG
 
 
 def test_old_config_gets_new_options():

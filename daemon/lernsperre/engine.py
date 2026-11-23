@@ -130,7 +130,7 @@ class Engine:
     def unlock_reached(self) -> bool:
         st, cfg = self.state, self.cfg
         time_ok = st.learned >= cfg.learn_seconds
-        cards_ok = st.cards_done >= cfg.min_cards
+        cards_ok = cfg.min_cards is not None and st.cards_done >= cfg.min_cards
         if cfg.unlock_mode == "cards":
             return cards_ok
         if cfg.unlock_mode == "both":

@@ -21,6 +21,9 @@ LernSperre – Befehle
   lernsperre detect-ankis    alle Anki-Installationen suchen (Flatpak, Snap, deb, Installer, pip, AppImage)
   lernsperre use-anki N      Installation Nr. N aus detect-ankis für LernSperre einstellen
   lernsperre config          Pfad der Einstellungsdatei ausgeben
+  lernsperre reset-config    Einstellungen auf Standard zurücksetzen (alte Datei wird als .bak gesichert)
+  lernsperre reset-config --behalten
+                             Datei neu und übersichtlich schreiben, deine Werte und Ziele bleiben
   lernsperre reload          Einstellungen sofort neu laden (passiert sonst automatisch)
   lernsperre quit            LernSperre beenden (bis zur nächsten Anmeldung)
   lernsperre start           LernSperre wieder starten
@@ -72,12 +75,39 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument(
         "command", nargs="?", default="status",
         choices=["run", "status", "lock", "pause", "resume", "reset", "reload", "edit",
-                 "config", "quit", "start", "json", "hilfe", "help", "detect-ankis", "use-anki"],
+                 "config", "quit", "start", "json", "hilfe", "help", "detect-ankis", "use-anki", "reset-config"],
     )
     ap.add_argument("number", nargs="?", type=int, default=None, help="Minuten für pause, Nummer für use-anki")
+    ap.add_argument("--behalten", action="store_true", help="bei reset-config: eigene Werte und Ziele übernehmen")
     args = ap.parse_args(argv)
 
     minutes = args.number if args.number is not None else 30
+    if args.command == "reset-config":
+        import shutil
+        import time
+
+        from .config import CONFIG_FILE, fresh_config, parse_config
+
+        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        old = CONFIG_FILE.read_text(encoding="utf-8") if CONFIG_FILE.exists() else None
+        if args.behalten and old is not None:
+            try:
+                new = fresh_config(old)
+                parse_config(new)
+            except Exception as e:  # noqa: BLE001
+                print(f"Deine Datei ist fehlerhaft, Werte können nicht übernommen werden: {e}", file=sys.stderr)
+                print("Ohne --behalten wird sie auf Standard zurückgesetzt.", file=sys.stderr)
+                sys.exit(1)
+        else:
+            new = fresh_config()
+        if old is not None:
+            backup = CONFIG_FILE.with_name(f"config.toml.bak-{time.strftime('%Y%m%d-%H%M%S')}")
+            shutil.copy2(CONFIG_FILE, backup)
+            print(f"Alte Datei gesichert: {backup}")
+        CONFIG_FILE.write_text(new, encoding="utf-8")
+        print("Einstellungen neu geschrieben" + (" (deine Werte und Ziele übernommen)." if args.behalten else " (Standardwerte)."))
+        print(f"Datei: {CONFIG_FILE}  – LernSperre übernimmt das automatisch.")
+        return
     if args.command == "detect-ankis":
         from .config import load_config
         from .detect import detect, format_installs
@@ -190,6 +220,7 @@ def main(argv: list[str] | None = None) -> None:
             print(f"Vorderes Fenster: {fw['title']} (App-ID: {fw['app_id'] or '–'}, WM_CLASS: {fw['wm_class'] or '–'})")
         for p in s["players"]:
             print(f"Wiedergabe: {p['name']} – {'läuft' if p['playing'] else 'pausiert'} – {p['title']}")
+        print("\nAlle Befehle: lernsperre hilfe (oder: lernsperre + zweimal Tab)")
 
 
 if __name__ == "__main__":

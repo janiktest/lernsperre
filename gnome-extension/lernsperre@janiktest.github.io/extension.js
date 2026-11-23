@@ -317,12 +317,22 @@ export default class LernSperreExtension extends Extension {
         this._launchUri(Gio.File.new_for_path(path).get_uri());
     }
 
-    _start() {
+    _run(argv) {
         try {
-            Gio.Subprocess.new(['systemctl', '--user', 'start', 'lernsperre.service'], Gio.SubprocessFlags.NONE);
+            Gio.Subprocess.new(argv, Gio.SubprocessFlags.NONE);
         } catch (e) {
-            console.error(`LernSperre: Start fehlgeschlagen: ${e}`);
+            console.error(`LernSperre: ${argv.join(' ')} fehlgeschlagen: ${e}`);
         }
+    }
+
+    // Menüpunkt, der einen Befehl ausführt. Beim Drüberfahren zeigt er den Befehl.
+    _commandItem(label, command) {
+        const item = new PopupMenu.PopupMenuItem(label);
+        item.connect('notify::hover', () => {
+            item.label.text = item.hover ? `$ ${command}` : label;
+        });
+        item.connect('activate', () => this._run(['sh', '-c', command]));
+        return item;
     }
 
     // --- Panel ------------------------------------------------------------
@@ -375,9 +385,14 @@ export default class LernSperreExtension extends Extension {
         this._quitItem.connect('activate', () => this._proxy?.QuitRemote(() => {}));
         this._indicator.menu.addMenuItem(this._quitItem);
 
-        this._startItem = new PopupMenu.PopupMenuItem('LernSperre starten');
-        this._startItem.connect('activate', () => this._start());
+        this._startItem = this._commandItem('LernSperre starten', 'systemctl --user start lernsperre');
         this._indicator.menu.addMenuItem(this._startItem);
+
+        this._indicator.menu.addMenuItem(this._commandItem(
+            'Dienst neu starten', 'systemctl --user restart lernsperre'));
+        this._indicator.menu.addMenuItem(this._commandItem(
+            'Erweiterung neu laden',
+            `gnome-extensions disable ${this.uuid} && gnome-extensions enable ${this.uuid}`));
 
         Main.panel.addToStatusArea(this.uuid, this._indicator);
     }
