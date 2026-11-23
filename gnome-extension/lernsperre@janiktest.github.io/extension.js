@@ -30,11 +30,17 @@ const IFACE_XML = `
     <method name="LockNow"/>
     <method name="Reset"/>
     <method name="Reload"/>
+    <method name="Pause"><arg type="u" name="minutes" direction="in"/></method>
+    <method name="Resume"/>
+    <method name="Quit"/>
     <signal name="StateChanged"><arg type="s" name="state_json"/></signal>
   </interface>
 </node>`;
 const LernSperreProxy = Gio.DBusProxy.makeProxyWrapper(IFACE_XML);
 
+const GITHUB_URL = 'https://github.com/janiktest/lernsperre';
+const GUIDE_URL = `${GITHUB_URL}/blob/main/docs/ANLEITUNG.md`;
+const DEFAULT_ICONS = {free: '⏳', locked: '🔒', paused: '☕', learning: '▶', learning_paused: '⏸'};
 const REPORT_INTERVAL_S = 2;
 const ANKI_START_GRACE_MS = 30000;
 const WATCHED_TYPES = [
@@ -185,25 +191,35 @@ export default class LernSperreExtension extends Extension {
         // Panel
         this._label.remove_style_class_name('lernsperre-panel-locked');
         this._label.remove_style_class_name('lernsperre-panel-warn');
+        const icons = {...DEFAULT_ICONS, ...(s?.icons ?? {})};
+        const withTime = (icon, secs) => (s?.show_time === false || secs === null ? icon : `${icon} ${fmt(secs)}`);
         if (!s) {
             this._label.text = 'LS –';
-            this._statusItem.label.text = 'LernSperre-Dienst läuft nicht';
+            this._statusItem.label.text = 'LernSperre läuft nicht';
         } else if (locked) {
-            this._label.text = `🔒 ${fmt(s.learn_remaining)}${s.learning_active ? ' ▶' : ' ⏸'}`;
+            const goal = this._lockProgress(s);
+            const learnIcon = s.learning_active ? icons.learning : icons.learning_paused;
+            const secs = s.unlock_mode === 'cards' ? null : s.learn_remaining;
+            let text = withTime(icons.locked, secs);
+            if (s.unlock_mode !== 'time')
+                text += ` ${s.cards_done}/${s.min_cards}`;
+            this._label.text = `${text} ${learnIcon}`;
             this._label.add_style_class_name('lernsperre-panel-locked');
-            this._statusItem.label.text = s.learning_active
-                ? `Lernzeit läuft: noch ${fmt(s.learn_remaining)}`
-                : `Lernzeit pausiert: Anki vorne haben und Karten beantworten (noch ${fmt(s.learn_remaining)})`;
+            this._statusItem.label.text = `Gesperrt – ${goal}`;
+        } else if (s.paused) {
+            this._label.text = withTime(icons.paused, s.paused_remaining);
+            this._statusItem.label.text = `Pausiert – noch ${fmt(s.paused_remaining)}`;
         } else {
-            this._label.text = `⏳ ${fmt(s.remaining)}`;
+            this._label.text = withTime(icons.free, s.remaining);
             if (s.remaining <= 60)
                 this._label.add_style_class_name('lernsperre-panel-warn');
             this._statusItem.label.text = s.target
                 ? `Zählt gerade: ${s.target} (${s.reason}) – noch ${fmt(s.remaining)}`
                 : `Noch ${fmt(s.remaining)} von ${fmt(s.allowed)} erlaubt`;
         }
-        this._lockItem.visible = !!s && !locked;
-        this._resetItem.visible = !!s && !locked;
+        if (s?.config_error)
+            this._statusItem.label.text += `\n⚠ ${s.config_error}`;
+        this._updateMenu(s, locked);
 
         // Overlay
         const focus = global.display.focus_window;
@@ -213,12 +229,100 @@ export default class LernSperreExtension extends Extension {
         if (this._isAnki(focus))
             this._graceUntil = 0;
         if (locked) {
-            this._timeLabel.text = fmt(s.learn_remaining);
-            this._hintLabel.text = s.anki_note
-                ? `Hinweis: ${s.anki_note}`
+            this._goalLabel.text = `${s.unlock_goal} in Anki, dann geht es weiter.`;
+            this._timeLabel.text = this._lockProgress(s);
+            let hint = s.unlock_mode === 'cards'
+                ? 'Es zählen alle Karten, die du seit der Sperre beantwortest.'
                 : `Die Lernzeit läuft nur, solange Anki vorne ist und du Karten beantwortest (Pause nach ${Math.round(s.idle_seconds)} s ohne Antwort).`;
+            if (s.anki_note)
+                hint = `Hinweis: ${s.anki_note}`;
+            this._hintLabel.text = hint;
         }
         this._setOverlayVisible(show);
+    }
+
+    _lockProgress(s) {
+        const parts = [];
+        if (s.unlock_mode !== 'cards')
+            parts.push(`noch ${fmt(s.learn_remaining)}`);
+        if (s.unlock_mode !== 'time')
+            parts.push(`${s.cards_done} von ${s.min_cards} Karten`);
+        return parts.join(' · ');
+    }
+
+    _updateMenu(s, locked) {
+        const running = !!s;
+        this._lockItem.visible = running && !locked;
+        this._resetItem.visible = running && !locked;
+        this._pauseMenu.visible = running && !locked && !s.paused;
+        this._resumeItem.visible = running && !!s?.paused;
+        this._quitItem.visible = running && !locked;
+        this._startItem.visible = !running;
+
+        const key = JSON.stringify(s?.pause_minutes ?? []);
+        if (running && key !== this._pauseKey) {
+            this._pauseKey = key;
+            this._pauseMenu.menu.removeAll();
+            for (const m of s.pause_minutes) {
+                const item = new PopupMenu.PopupMenuItem(`${m} Minuten`);
+                item.connect('activate', () => this._proxy?.PauseRemote(m, () => {}));
+                this._pauseMenu.menu.addMenuItem(item);
+            }
+        }
+    }
+
+    _launchUri(uri) {
+        try {
+            Gio.AppInfo.launch_default_for_uri(uri, global.create_app_launch_context(0, -1));
+            return true;
+        } catch (e) {
+            console.debug(`LernSperre: ${uri} nicht geöffnet: ${e}`);
+            return false;
+        }
+    }
+
+    _openSettings() {
+        const path = this._state?.config_path ??
+            GLib.build_filenamev([GLib.get_user_config_dir(), 'lernsperre', 'config.toml']);
+        const editor = (this._state?.editor ?? '').trim();
+        const commands = [];
+        if (editor)
+            commands.push([...editor.split(/\s+/), path]);
+        for (const cmd of commands) {
+            try {
+                Gio.Subprocess.new(cmd, Gio.SubprocessFlags.NONE);
+                return;
+            } catch (e) {
+                console.debug(`LernSperre: ${cmd[0]} nicht gefunden`);
+            }
+        }
+        // Standard-Texteditor (TOML wird als Text geöffnet)
+        const textApp = Gio.AppInfo.get_default_for_type('text/plain', false);
+        if (textApp) {
+            try {
+                textApp.launch([Gio.File.new_for_path(path)], global.create_app_launch_context(0, -1));
+                return;
+            } catch (e) {
+                console.debug(`LernSperre: Texteditor nicht gestartet: ${e}`);
+            }
+        }
+        for (const cmd of [['gnome-text-editor', path], ['gedit', path]]) {
+            try {
+                Gio.Subprocess.new(cmd, Gio.SubprocessFlags.NONE);
+                return;
+            } catch (e) {
+                // nächsten probieren
+            }
+        }
+        this._launchUri(Gio.File.new_for_path(path).get_uri());
+    }
+
+    _start() {
+        try {
+            Gio.Subprocess.new(['systemctl', '--user', 'start', 'lernsperre.service'], Gio.SubprocessFlags.NONE);
+        } catch (e) {
+            console.error(`LernSperre: Start fehlgeschlagen: ${e}`);
+        }
     }
 
     // --- Panel ------------------------------------------------------------
@@ -239,9 +343,41 @@ export default class LernSperreExtension extends Extension {
         this._lockItem.connect('activate', () => this._proxy?.LockNowRemote(() => {}));
         this._indicator.menu.addMenuItem(this._lockItem);
 
+        this._pauseMenu = new PopupMenu.PopupSubMenuMenuItem('Pausieren');
+        this._indicator.menu.addMenuItem(this._pauseMenu);
+        this._pauseKey = null;
+
+        this._resumeItem = new PopupMenu.PopupMenuItem('Pause beenden');
+        this._resumeItem.connect('activate', () => this._proxy?.ResumeRemote(() => {}));
+        this._indicator.menu.addMenuItem(this._resumeItem);
+
         this._resetItem = new PopupMenu.PopupMenuItem('Zähler zurücksetzen');
         this._resetItem.connect('activate', () => this._proxy?.ResetRemote(() => {}));
         this._indicator.menu.addMenuItem(this._resetItem);
+
+        this._indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+        const settings = new PopupMenu.PopupMenuItem('Einstellungen');
+        settings.connect('activate', () => this._openSettings());
+        this._indicator.menu.addMenuItem(settings);
+
+        const guide = new PopupMenu.PopupMenuItem('Anleitung');
+        guide.connect('activate', () => this._launchUri(GUIDE_URL));
+        this._indicator.menu.addMenuItem(guide);
+
+        const github = new PopupMenu.PopupMenuItem('GitHub-Seite');
+        github.connect('activate', () => this._launchUri(GITHUB_URL));
+        this._indicator.menu.addMenuItem(github);
+
+        this._indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+        this._quitItem = new PopupMenu.PopupMenuItem('LernSperre beenden');
+        this._quitItem.connect('activate', () => this._proxy?.QuitRemote(() => {}));
+        this._indicator.menu.addMenuItem(this._quitItem);
+
+        this._startItem = new PopupMenu.PopupMenuItem('LernSperre starten');
+        this._startItem.connect('activate', () => this._start());
+        this._indicator.menu.addMenuItem(this._startItem);
 
         Main.panel.addToStatusArea(this.uuid, this._indicator);
     }
@@ -268,9 +404,11 @@ export default class LernSperreExtension extends Extension {
         });
         box.add_child(new St.Label({text: 'Zeit zum Lernen', style_class: 'lernsperre-title'}));
         box.add_child(new St.Label({
-            text: 'Die erlaubte Zeit ist um. Lerne jetzt in Anki, dann geht es weiter.',
+            text: 'Die erlaubte Zeit ist um.',
             style_class: 'lernsperre-text',
         }));
+        this._goalLabel = new St.Label({text: '', style_class: 'lernsperre-text'});
+        box.add_child(this._goalLabel);
         this._timeLabel = new St.Label({text: '', style_class: 'lernsperre-time'});
         box.add_child(this._timeLabel);
         this._hintLabel = new St.Label({text: '', style_class: 'lernsperre-text'});

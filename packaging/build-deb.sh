@@ -24,7 +24,7 @@ sed -e '/^Environment=PYTHONPATH=/d' -e 's|^ExecStart=.*$|ExecStart=/usr/bin/ler
     systemd/lernsperre.service > "$ROOT/usr/lib/systemd/user/lernsperre.service"
 
 cp gnome-extension/$UUID/* "$ROOT/usr/share/gnome-shell/extensions/$UUID/"
-cp README.md LICENSE "$ROOT/usr/share/doc/lernsperre/"
+cp README.md LICENSE docs/ANLEITUNG.md "$ROOT/usr/share/doc/lernsperre/"
 
 sed "s/@VERSION@/$VERSION/" packaging/debian/control.in > "$ROOT/DEBIAN/control"
 install -m 755 packaging/debian/postinst packaging/debian/prerm "$ROOT/DEBIAN/"

@@ -25,6 +25,7 @@ class Signals:
     windows: list[Window] | None = None  # None = GNOME-Erweiterung meldet sich nicht
     players: list[Player] = field(default_factory=list)
     last_answer: float | None = None  # Unix-Sekunden der letzten Anki-Antwort
+    cards_since_lock: int | None = None  # beantwortete Karten seit Beginn der Sperre
 
     @property
     def focused(self) -> Window | None:
@@ -41,6 +42,8 @@ class State:
     learned: float = 0.0  # gezählte Lernsekunden in der aktuellen Sperre
     warned: bool = False
     lock_started: float = 0.0
+    cards_done: int = 0  # beantwortete Karten in der aktuellen Sperre
+    paused_until: float = 0.0
     unmonitored: float = 0.0  # Sekunden ohne Meldung der GNOME-Erweiterung (gesamt)
 
     @classmethod
@@ -87,6 +90,7 @@ class Engine:
         self.activity = Activity()
         self.learning_active = False
         self.anki_focused = False
+        self.now = 0.0
 
     # --- Aktionen -------------------------------------------------------
     def lock(self, now: float) -> list[tuple]:
@@ -94,15 +98,44 @@ class Engine:
             return []
         self.state.mode = "locked"
         self.state.learned = 0.0
+        self.state.cards_done = 0
         self.state.lock_started = now
+        self.state.paused_until = 0.0
         return [("locked",)]
 
     def unlock(self) -> list[tuple]:
         self.state.mode = "free"
         self.state.used = 0.0
         self.state.learned = 0.0
+        self.state.cards_done = 0
         self.state.warned = False
         return [("unlocked",)]
+
+    def pause(self, now: float, minutes: float) -> list[tuple]:
+        """Pausiert das Zählen. Während einer Sperre nicht möglich."""
+        if self.state.mode == "locked" or minutes <= 0:
+            return []
+        self.state.paused_until = now + minutes * 60
+        return [("paused", minutes)]
+
+    def resume(self) -> list[tuple]:
+        if self.state.paused_until == 0:
+            return []
+        self.state.paused_until = 0.0
+        return [("resumed",)]
+
+    def is_paused(self, now: float) -> bool:
+        return self.state.mode == "free" and now < self.state.paused_until
+
+    def unlock_reached(self) -> bool:
+        st, cfg = self.state, self.cfg
+        time_ok = st.learned >= cfg.learn_seconds
+        cards_ok = st.cards_done >= cfg.min_cards
+        if cfg.unlock_mode == "cards":
+            return cards_ok
+        if cfg.unlock_mode == "both":
+            return time_ok and cards_ok
+        return time_ok
 
     def reset(self) -> list[tuple]:
         was_locked = self.state.mode == "locked"
@@ -119,7 +152,14 @@ class Engine:
 
         self.anki_focused = is_anki(self.cfg, sig.focused)
 
-        if st.mode == "free":
+        self.now = now
+        if st.mode == "free" and st.paused_until and now >= st.paused_until:
+            st.paused_until = 0.0
+            events.append(("resumed",))
+        if st.mode == "free" and self.is_paused(now):
+            self.learning_active = False
+            self.activity = Activity()
+        elif st.mode == "free":
             self.learning_active = False
             self.activity = detect_activity(self.cfg, sig)
             if self.activity.target:
@@ -145,7 +185,9 @@ class Engine:
             )
             if self.learning_active:
                 st.learned += dt
-            if st.learned >= self.cfg.learn_seconds:
+            if sig.cards_since_lock is not None:
+                st.cards_done = max(st.cards_done, sig.cards_since_lock)
+            if self.unlock_reached():
                 events += self.unlock()
             elif self.cfg.pause_media_on_lock and any(p.playing for p in sig.players):
                 events.append(("pause_media",))
@@ -163,6 +205,20 @@ class Engine:
             "learned": round(st.learned, 1),
             "learn_remaining": round(max(0.0, self.cfg.learn_seconds - st.learned), 1),
             "learning_active": self.learning_active,
+            "unlock_mode": self.cfg.unlock_mode,
+            "min_cards": self.cfg.min_cards,
+            "cards_done": st.cards_done,
+            "paused": self.is_paused(self.now),
+            "paused_remaining": round(max(0.0, st.paused_until - self.now)) if self.is_paused(self.now) else 0,
+            "pause_minutes": list(self.cfg.pause_minutes),
+            "icons": {
+                "free": self.cfg.icon_free,
+                "locked": self.cfg.icon_locked,
+                "paused": self.cfg.icon_paused,
+                "learning": self.cfg.icon_learning,
+                "learning_paused": self.cfg.icon_learning_paused,
+            },
+            "show_time": bool(self.cfg.show_time),
             "anki_focused": self.anki_focused,
             "target": self.activity.target,
             "reason": self.activity.reason,

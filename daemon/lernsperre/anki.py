@@ -72,6 +72,25 @@ class AnkiActivity:
         self._last_wal_mtime = m
         return self._wal_change_at
 
+    def cards_since(self, ts: float) -> int | None:
+        """Anzahl beantworteter Karten seit ts (Unix-Sekunden), None wenn nicht lesbar.
+
+        Auch Antworten vom Handy zählen, sobald sie synchronisiert sind.
+        """
+        self._refresh_path()
+        if self.path is None:
+            return None
+        try:
+            con = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True, timeout=0.2)
+            try:
+                row = con.execute("SELECT count(*) FROM revlog WHERE id >= ?", (int(ts * 1000),)).fetchone()
+            finally:
+                con.close()
+        except sqlite3.Error as e:
+            self.last_error = f"Karten nicht zählbar ({e})"
+            return None
+        return int(row[0])
+
     def last_answer(self, now: float) -> float | None:
         """Zeitpunkt (Unix-Sekunden) der letzten Antwort, sonst None."""
         self._refresh_path()

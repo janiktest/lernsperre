@@ -31,6 +31,9 @@ IFACE_XML = f"""
     <method name="LockNow"/>
     <method name="Reset"/>
     <method name="Reload"/>
+    <method name="Pause"><arg type="u" name="minutes" direction="in"/></method>
+    <method name="Resume"/>
+    <method name="Quit"/>
     <signal name="StateChanged"><arg type="s" name="state_json"/></signal>
   </interface>
 </node>
@@ -54,6 +57,9 @@ class Service:
         self.players_at = 0.0
         self.last_answer: float | None = None
         self.last_answer_at = 0.0
+        self.cards_since_lock: int | None = None
+        self.config_mtime = self._config_mtime()
+        self.config_error = ""
         self.last_mono = time.monotonic()
         self.ticks = 0
         self.loop = GLib.MainLoop()
@@ -131,16 +137,60 @@ class Service:
                 self._handle(self.engine.reset())
                 invocation.return_value(None)
             elif method == "Reload":
-                self.cfg = load_config()
-                self.engine.cfg = self.cfg
-                self.anki = AnkiActivity(self.cfg.anki_collection)
-                log.info("Einstellungen neu geladen")
+                self._reload(force=True)
+                if self.config_error:
+                    invocation.return_dbus_error(f"{IFACE}.ConfigError", self.config_error)
+                else:
+                    invocation.return_value(None)
+            elif method == "Pause":
+                (minutes,) = params.unpack()
+                events = self.engine.pause(time.time(), minutes)
+                if not events:
+                    invocation.return_dbus_error(f"{IFACE}.Error", "Während einer Sperre geht Pausieren nicht")
+                    return
+                self._handle(events)
                 invocation.return_value(None)
+            elif method == "Resume":
+                self._handle(self.engine.resume())
+                invocation.return_value(None)
+            elif method == "Quit":
+                log.info("Beendet über das Menü")
+                invocation.return_value(None)
+                GLib.idle_add(self.loop.quit)
             else:
                 invocation.return_dbus_error(f"{IFACE}.Error", f"Unbekannte Methode {method}")
         except Exception as e:  # noqa: BLE001
             log.exception("Fehler in %s", method)
             invocation.return_dbus_error(f"{IFACE}.Error", str(e))
+
+    # --- Einstellungen -------------------------------------------------
+    @staticmethod
+    def _config_mtime() -> float:
+        try:
+            return CONFIG_FILE.stat().st_mtime
+        except OSError:
+            return 0.0
+
+    def _reload(self, force: bool = False) -> None:
+        mtime = self._config_mtime()
+        if not force and mtime == self.config_mtime:
+            return
+        self.config_mtime = mtime
+        try:
+            cfg = load_config()
+        except Exception as e:  # noqa: BLE001
+            msg = f"Fehler in {CONFIG_FILE.name}: {e}"
+            if msg != self.config_error:
+                self._notify("Einstellungen fehlerhaft", f"{msg}\nDie alten Einstellungen bleiben aktiv.")
+            self.config_error = msg
+            log.warning(msg)
+            return
+        self.config_error = ""
+        self.config_mtime = self._config_mtime()
+        self.cfg = cfg
+        self.engine.cfg = cfg
+        self.anki = AnkiActivity(cfg.anki_collection)
+        log.info("Einstellungen neu geladen")
 
     # --- Signale sammeln ------------------------------------------------
     def _poll_players(self) -> None:
@@ -212,7 +262,10 @@ class Service:
     # --- Takt -----------------------------------------------------------
     def _signals(self, now: float) -> Signals:
         windows = self.windows if now - self.windows_at <= WINDOWS_STALE_AFTER else None
-        return Signals(windows=windows, players=self.players, last_answer=self.last_answer)
+        return Signals(
+            windows=windows, players=self.players, last_answer=self.last_answer,
+            cards_since_lock=self.cards_since_lock,
+        )
 
     def _tick(self) -> bool:
         now = time.time()
@@ -222,9 +275,14 @@ class Service:
             if now - self.players_at >= 2:
                 self._poll_players()
                 self.players_at = now
+            if self.ticks % 2 == 0:
+                self._reload()
             if self.engine.state.mode == "locked" and now - self.last_answer_at >= 2:
                 self.last_answer = self.anki.last_answer(now)
+                self.cards_since_lock = self.anki.cards_since(self.engine.state.lock_started)
                 self.last_answer_at = now
+            elif self.engine.state.mode != "locked":
+                self.cards_since_lock = None
             self._handle(self.engine.tick(now, dt, self._signals(now)))
             self.ticks += 1
             if self.ticks % 10 == 0:
@@ -241,27 +299,47 @@ class Service:
                 secs = int(round(ev[1]))
                 self._notify("Gleich wird gesperrt", f"Noch {secs} Sekunden, dann ist Lernen in Anki dran.")
             elif kind == "locked":
-                mins = self.cfg.learn_minutes
-                self._notify("Gesperrt", f"Lerne {mins:g} min in Anki, dann geht es weiter.")
+                self.cards_since_lock = None
+                self._notify("Gesperrt", f"{self._unlock_goal()} in Anki, dann geht es weiter.")
                 if self.cfg.pause_media_on_lock:
                     self._pause_players()
             elif kind == "unlocked":
                 self._notify("Entsperrt", "Gut gemacht! Die erlaubte Zeit beginnt von vorn.")
             elif kind == "pause_media":
                 self._pause_players()
+            elif kind == "paused":
+                self._notify("Pausiert", f"LernSperre zählt {ev[1]:g} min lang nicht.")
+            elif kind == "resumed":
+                self._notify("Pause vorbei", "LernSperre zählt wieder.")
             if kind != "pause_media":
                 self.store.log(kind)
                 self.store.save_state(self.engine.state_dict())
                 self._emit_state()
 
+    def _unlock_goal(self) -> str:
+        c = self.cfg
+        if c.unlock_mode == "cards":
+            return f"Beantworte {c.min_cards} Karten"
+        if c.unlock_mode == "both":
+            return f"Lerne {c.learn_minutes:g} min und beantworte {c.min_cards} Karten"
+        return f"Lerne {c.learn_minutes:g} min"
+
     def _snapshot(self) -> dict:
         snap = self.engine.snapshot()
         now = time.time()
         snap["version"] = __version__
+        snap["config_path"] = str(CONFIG_FILE)
+        snap["config_error"] = self.config_error
+        snap["editor"] = self.cfg.editor
+        snap["unlock_goal"] = self._unlock_goal()
         snap["monitoring"] = now - self.windows_at <= WINDOWS_STALE_AFTER
         snap["anki_collection"] = str(self.anki.path) if self.anki.path else ""
         snap["anki_note"] = self.anki.last_error
         snap["last_answer_ago"] = round(now - self.last_answer) if self.last_answer else None
+        fw = self._signals(now).focused
+        snap["focused_window"] = (
+            {"title": fw.title, "app_id": fw.app_id, "wm_class": fw.wm_class} if fw else None
+        )
         snap["players"] = [
             {"name": p.identity or p.app_key, "playing": p.playing, "title": p.title}
             for p in self.players
