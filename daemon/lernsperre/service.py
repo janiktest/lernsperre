@@ -75,12 +75,19 @@ class Service:
             self._on_name_lost,
         )
         GLib.timeout_add(1000, self._tick)
+        for sig in (15, 2):  # SIGTERM (systemctl stop), SIGINT: sauber beenden, Kopie löschen
+            GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, sig, self._on_signal)
         log.info("LernSperre %s läuft (Einstellungen: %s)", __version__, CONFIG_FILE)
         try:
             self.loop.run()
         finally:
             self.store.save_state(self.engine.state_dict())
             self.store.close()
+            self.anki.cleanup()
+
+    def _on_signal(self) -> bool:
+        self.loop.quit()
+        return False
 
     def _on_bus_acquired(self, conn: Gio.DBusConnection, name: str) -> None:
         self.conn = conn
@@ -135,6 +142,7 @@ class Service:
                 invocation.return_value(None)
             elif method == "Reset":
                 self._handle(self.engine.reset())
+                self.anki.cleanup()
                 invocation.return_value(None)
             elif method == "Reload":
                 self._reload(force=True)
@@ -278,7 +286,7 @@ class Service:
             if self.ticks % 2 == 0:
                 self._reload()
             if self.engine.state.mode == "locked":
-                # jede Sekunde: billig (stat), die Datenbank wird bei Sperre seltener gefragt
+                # jede Sekunde; kopiert/gelesen wird nur, wenn Anki etwas geschrieben hat
                 self.last_answer, self.cards_since_lock = self.anki.poll(now, self.engine.state.lock_started)
                 self.last_answer_at = now
             elif self.engine.state.mode != "locked":
@@ -306,6 +314,7 @@ class Service:
                 if self.cfg.pause_media_on_lock:
                     self._pause_players()
             elif kind == "unlocked":
+                self.anki.cleanup()
                 self._notify("Entsperrt", "Gut gemacht! Die erlaubte Zeit beginnt von vorn.")
             elif kind == "pause_media":
                 self._pause_players()

@@ -4,5 +4,5 @@
   "description": "Meldet das aktive Fenster an den LernSperre-Dienst, zeigt die Restzeit im Panel und sperrt den Bildschirm, bis in Anki gelernt wurde. Unabhängiges Projekt, nicht mit Anki oder Ankitects verbunden.",
   "shell-version": ["48", "49", "50", "51"],
   "url": "https://github.com/janiktest/lernsperre",
-  "version-name": "0.2.2"
+  "version-name": "0.2.3"
 }

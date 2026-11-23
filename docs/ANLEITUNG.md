@@ -100,7 +100,7 @@ learn_minutes = 5      # Lernzeit in Minuten
 
 Gezählt wird nur, was nach Beginn der Sperre beantwortet wurde. LernSperre liest dafür nur lesend in deiner Anki-Sammlung (Tabelle `revlog`). Es wird kein Anki-Add-on gebraucht und nichts in Anki verändert.
 
-Während einer Sperre prüft LernSperre jede Sekunde. Ist Anki geschlossen, wird genau gezählt (`revlog`). Solange die Anki-Desktop-App offen ist, sperrt sie ihre Datenbank; dann erkennt LernSperre Antworten an Änderungen der Datei `collection.anki2-wal`. Das ist ungefähr: Auch z. B. Rückgängig oder das Bearbeiten einer Karte kann als Antwort zählen. `lernsperre status` zeigt, welche Art gerade benutzt wird.
+Während einer Sperre prüft LernSperre jede Sekunde. Solange die Anki-Desktop-App offen ist, sperrt sie ihre Datenbank. Dann kopiert LernSperre sie nach `~/.cache/lernsperre` (die große Datei einmal, die kleine `collection.anki2-wal` bei jeder Änderung) und liest die Kopie. Dort stehen auch deine neuesten Antworten, denn Anki schreibt jede Antwort zuerst in die WAL-Datei. Die Kopie wird nur gelesen, nie zurückgeschrieben und nach der Sperre gelöscht. Ankis Dateien und die Synchronisierung bleiben unberührt.
 
 ### Notfall
 

@@ -206,24 +206,37 @@ def test_cards_since(tmp_path):
 
 
 def test_anki_activity_when_anki_locks_database(tmp_path):
-    """Die Anki-Desktop-App sperrt ihre Datenbank exklusiv; dann zählen WAL-Änderungen."""
+    """Die Anki-Desktop-App sperrt ihre Datenbank exklusiv; dann wird eine Kopie gelesen."""
     prof = tmp_path / "Benutzer 1"
     prof.mkdir()
-    anki = sqlite3.connect(prof / "collection.anki2", isolation_level=None)
+    db = prof / "collection.anki2"
+    anki = sqlite3.connect(db, isolation_level=None)
     anki.execute("PRAGMA locking_mode=exclusive")
     anki.execute("PRAGMA journal_mode=wal")
     anki.execute("CREATE TABLE revlog (id INTEGER PRIMARY KEY, cid INTEGER)")
-    act = AnkiActivity(search_dirs=[tmp_path])
+    anki.execute("CREATE TABLE cards (id INTEGER PRIMARY KEY, x TEXT)")
+    anki.execute("INSERT INTO cards VALUES (1, 'a')")
+    cache = tmp_path / "cache"
+    act = AnkiActivity(search_dirs=[tmp_path], cache_dir=cache)
     act.reset()
     t0 = time.time()
     assert act.poll(t0, t0) == (None, 0)
-    assert act.mode == "ungefähr"
-    for i in range(3):  # drei Antworten
-        anki.execute("INSERT INTO revlog VALUES (?, 1)", (int(time.time() * 1000) + i,))
+    assert act.mode == "kopie"
+    original = (db.read_bytes(), (prof / "collection.anki2-wal").read_bytes())
+    anki.execute("UPDATE cards SET x = 'Deck geöffnet' WHERE id = 1")  # keine Antwort
+    assert act.poll(t0 + 1, t0) == (None, 0)
+    ids = [int(t0 * 1000) + 100 + i for i in range(3)]
+    for i, ms in enumerate(ids):  # drei Antworten
+        anki.execute("INSERT INTO revlog VALUES (?, 1)", (ms,))
         last, cards = act.poll(t0 + 2 + i, t0)
-        assert last == t0 + 2 + i and cards == i + 1
-    assert act.poll(t0 + 10, t0) == (t0 + 4, 3)  # nichts Neues
+        assert last == ms / 1000 and cards == i + 1
+    anki.execute("DELETE FROM revlog WHERE id = ?", (ids[-1],))  # Rückgängig
+    assert act.poll(t0 + 10, t0)[1] == 2
+    # Antworten von vor der Sperre zählen nicht
+    assert act.poll(t0 + 11, t0 + 5)[1] == 0
+    assert db.stat().st_size == len(original[0])  # Ankis Hauptdatei unverändert
+    act.cleanup()
+    assert not cache.exists()
     anki.close()
-    # Anki zu: wieder genau lesen (nach der Wartezeit)
-    last, cards = act.poll(t0 + 100, t0)
-    assert act.mode == "genau" and cards == 3
+    # Anki zu: wieder direkt lesen
+    assert act.poll(t0 + 100, t0)[1] == 2 and act.mode == "direkt"
