@@ -115,3 +115,69 @@ def test_anki_activity_reads_revlog(tmp_path):
     con.commit()
     assert abs(act.last_answer(time.time()) - t) < 0.01
     assert act.path == db
+
+
+def cfg_with(**kw):
+    import dataclasses
+    return dataclasses.replace(parse_config(DEFAULT_CONFIG), **kw)
+
+
+def test_pause_stops_counting_and_ends():
+    e = Engine(CFG)
+    assert e.pause(1000, 1) == [("paused", 1)]
+    run(e, Signals(windows=[FF_YT]), 30, start=1000)
+    assert e.state.used == 0 and e.snapshot()["paused"]
+    events = run(e, Signals(windows=[FF_YT]), 40, start=1030)
+    assert ("resumed",) in events and e.state.used > 0
+
+
+def test_no_pause_while_locked_and_lock_clears_pause():
+    e = Engine(CFG)
+    e.pause(0, 30)
+    e.lock(10)
+    assert e.state.paused_until == 0
+    assert e.pause(20, 15) == []
+
+
+def test_cards_mode_unlocks_by_card_count_without_time():
+    e = Engine(cfg_with(unlock_mode="cards", min_cards=3))
+    e.lock(0)
+    e.tick(1, 1, Signals(windows=[TERM], cards_since_lock=2))
+    assert e.state.mode == "locked"
+    assert e.tick(2, 1, Signals(windows=[TERM], cards_since_lock=3)) == [("unlocked",)]
+
+
+def test_both_mode_needs_time_and_cards():
+    e = Engine(cfg_with(unlock_mode="both", min_cards=2, learn_minutes=1))
+    e.lock(0)
+    run(e, Signals(windows=[ANKI], cards_since_lock=5), 30, start=1, last_answer_fn=lambda n: n)
+    assert e.state.mode == "locked"  # Karten reichen, Zeit noch nicht
+    events = run(e, Signals(windows=[ANKI], cards_since_lock=5), 40, start=31, last_answer_fn=lambda n: n)
+    assert ("unlocked",) in events
+
+
+def test_invalid_unlock_mode_rejected():
+    import pytest
+    with pytest.raises(ValueError):
+        parse_config('unlock_mode = "egal"\n')
+
+
+def test_old_config_gets_new_options():
+    from lernsperre.config import add_missing_options
+    old = 'allowed_minutes = 10\n\n[[targets]]\nname = "YouTube"\ntitles = ["YouTube"]\n'
+    new = add_missing_options(old)
+    cfg = parse_config(new)
+    assert cfg.allowed_minutes == 10 and cfg.unlock_mode == "time" and cfg.icon_locked == "🔒"
+    assert [t.name for t in cfg.targets] == ["YouTube"]
+    assert add_missing_options(DEFAULT_CONFIG) == DEFAULT_CONFIG
+
+
+def test_cards_since(tmp_path):
+    prof = tmp_path / "p"
+    prof.mkdir()
+    con = sqlite3.connect(prof / "collection.anki2")
+    con.execute("CREATE TABLE revlog (id INTEGER PRIMARY KEY, cid INTEGER)")
+    con.executemany("INSERT INTO revlog VALUES (?, 1)", [(1000_000,), (2000_000,), (3000_000,)])
+    con.commit()
+    act = AnkiActivity(search_dirs=[tmp_path])
+    assert act.cards_since(1500) == 2

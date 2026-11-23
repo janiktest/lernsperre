@@ -10,6 +10,7 @@ einer Karte aber nicht.
 from __future__ import annotations
 
 import os
+import shlex
 import sqlite3
 from pathlib import Path
 
@@ -20,12 +21,35 @@ SEARCH_DIRS = [
 ]
 
 
+def resolve_launch(spec: str) -> list[str]:
+    """Wandelt anki_launch (Befehl, Programm oder Ordner) in eine Befehlszeile um."""
+    spec = spec.strip()
+    if not spec:
+        return []
+    path = Path(spec).expanduser()
+    if path.is_dir():
+        for rel in ("anki", "bin/anki", ".venv/bin/anki", "AppRun"):
+            exe = path / rel
+            if exe.is_file() and os.access(exe, os.X_OK):
+                return [str(exe)]
+        images = sorted(path.glob("*.AppImage"))
+        if images:
+            return [str(images[0])]
+        raise ValueError(f"In {path} wurde kein Anki-Programm gefunden")
+    if path.is_file():
+        return [str(path)]
+    return shlex.split(spec)
+
+
 def find_collection(configured: str = "", search_dirs: list[Path] | None = None) -> Path | None:
     if configured:
         p = Path(configured).expanduser()
         return p if p.exists() else None
     candidates: list[Path] = []
-    for d in search_dirs or SEARCH_DIRS:
+    dirs = list(search_dirs or SEARCH_DIRS)
+    if search_dirs is None:
+        dirs += list(HOME.glob("snap/*/*/.local/share/Anki2"))  # Snap
+    for d in dirs:
         if d.is_dir():
             candidates.extend(d.glob("*/collection.anki2"))
     if not candidates:
@@ -71,6 +95,25 @@ class AnkiActivity:
             self._wal_change_at = min(m, now)
         self._last_wal_mtime = m
         return self._wal_change_at
+
+    def cards_since(self, ts: float) -> int | None:
+        """Anzahl beantworteter Karten seit ts (Unix-Sekunden), None wenn nicht lesbar.
+
+        Auch Antworten vom Handy zählen, sobald sie synchronisiert sind.
+        """
+        self._refresh_path()
+        if self.path is None:
+            return None
+        try:
+            con = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True, timeout=0.2)
+            try:
+                row = con.execute("SELECT count(*) FROM revlog WHERE id >= ?", (int(ts * 1000),)).fetchone()
+            finally:
+                con.close()
+        except sqlite3.Error as e:
+            self.last_error = f"Karten nicht zählbar ({e})"
+            return None
+        return int(row[0])
 
     def last_answer(self, now: float) -> float | None:
         """Zeitpunkt (Unix-Sekunden) der letzten Antwort, sonst None."""

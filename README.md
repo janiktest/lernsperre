@@ -47,31 +47,20 @@ cd lernsperre
 
 Nicht beides gleichzeitig installieren. Bei jedem Merge nach `main` baut GitHub Actions das .deb und hängt es an das Release der aktuellen Version (`__version__` in `daemon/lernsperre/__init__.py`).
 
-## Bedienung
+## Bedienung und Einstellungen
+
+Alles Wichtige steht in der **[Anleitung](docs/ANLEITUNG.md)**: Panel-Menü (Pausieren, Einstellungen, Beenden …), alle Einstellungen, Ziele bearbeiten, Befehle und Hilfe bei Problemen.
+
+Kurz:
 
 ```bash
-lernsperre status   # Restzeit, was gerade zählt, Zustand der Überwachung
-lernsperre lock     # Sperre jetzt aktivieren (z. B. zum Ausprobieren)
-lernsperre reset    # Zähler zurücksetzen / Sperre aufheben (Notfall)
-lernsperre config   # Pfad der Einstellungsdatei
-lernsperre reload   # Einstellungen neu laden
+lernsperre status   # Restzeit, was gerade zählt
+lernsperre lock     # Sperre jetzt aktivieren
+lernsperre pause 30 # 30 min pausieren
+lernsperre edit     # Einstellungen öffnen (werden nach dem Speichern automatisch übernommen)
+lernsperre detect-ankis  # alle Anki-Installationen finden, dann: lernsperre use-anki N
+lernsperre hilfe    # alle Befehle
 ```
-
-Im Panel oben steht `⏳ 12:34` (verbleibende Zeit) bzw. während der Sperre `🔒 4:12 ▶` (Lernzeit läuft) oder `⏸` (pausiert). Das Menü dahinter hat „Anki öffnen“, „Sperre jetzt aktivieren“ und „Zähler zurücksetzen“.
-
-Notfall: Auf dem Sperrbildschirm gibt es unten „Notfall: Sperre aufheben“ (zweimal klicken). Ohne Overlay geht `lernsperre reset` im Terminal.
-
-## Einstellungen
-
-`~/.config/lernsperre/config.toml` (wird beim ersten Start angelegt):
-
-- `allowed_minutes` – erlaubte Zeit bis zur Sperre (20)
-- `learn_minutes` – Lernzeit zum Entsperren (5)
-- `warn_seconds` – Warnung vor der Sperre (60, 0 = aus)
-- `idle_seconds` – Lernzeit pausiert, wenn so lange keine Karte beantwortet wurde (60)
-- `pause_media_on_lock` – Wiedergabe bei Sperre pausieren (true)
-- `anki_collection` – Pfad zu `collection.anki2`, leer = automatisch
-- `[[targets]]` – Ziele mit `titles` (Fenstertitel, `re:` für reguläre Ausdrücke), `apps` (App-ID / WM_CLASS, z. B. für native Apps) und `urls` (für die spätere Browser-Erweiterung)
 
 ## Entwicklung
 
@@ -82,5 +71,6 @@ cd daemon && pytest -q
 ## Stand
 
 - [x] Schritt 1: Erkennung (Fenster + MPRIS), Zeitzähler, Panel, Warnung, Sperre mit Anki, Installationsskript, .deb mit automatischem Release
+- [x] Panel-Menü mit Pausieren, Einstellungen, Anleitung, Beenden; Entsperren nach Zeit, Karten oder beidem
 - [ ] Browser-Erweiterung für Firefox (genaue Adresse, Ton im Tab)
-- [ ] Einstellungsfenster und Einführung beim ersten Start, Hinweis wenn die Überwachung aus war
+- [ ] Einführung beim ersten Start, Hinweis wenn die Überwachung aus war
