@@ -19,7 +19,7 @@ GitHub: <https://github.com/janiktest/lernsperre>
 
 Voraussetzungen: Ubuntu mit GNOME (ab GNOME 48, z. B. Ubuntu 26.04) und Anki als Flatpak (`net.ankiweb.Anki`). Eine normale Anki-Installation (`~/.local/share/Anki2`) wird auch gefunden.
 
-**Update:** einfach die neue .deb genauso installieren und einmal neu anmelden. Deine Einstellungen bleiben erhalten, neue Optionen werden automatisch in deine Einstellungsdatei eingefügt.
+**Update:** die neue .deb genauso installieren. Ob du dich danach neu anmelden musst oder `systemctl --user restart lernsperre` reicht, steht bei jedem [Release](https://github.com/janiktest/lernsperre/releases) und im [Changelog](../CHANGELOG.md). Deine Einstellungen bleiben erhalten, neue Optionen werden automatisch in deine Einstellungsdatei eingefügt.
 
 **Entfernen:** `sudo apt remove lernsperre`
 
