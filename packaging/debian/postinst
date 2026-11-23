@@ -5,7 +5,9 @@ if [ "$1" = "configure" ]; then
     systemctl --global enable lernsperre.service >/dev/null 2>&1 || true
     echo ""
     echo "LernSperre ist installiert."
-    echo "Bitte einmal ab- und wieder anmelden. Danach laufen Dienst und GNOME-Erweiterung automatisch."
+    echo "Neu installiert: einmal ab- und wieder anmelden. Danach laufen Dienst und GNOME-Erweiterung automatisch."
+    echo "Update: siehe Changelog, meist reicht neu anmelden oder: systemctl --user restart lernsperre"
+    echo "https://github.com/janiktest/lernsperre/blob/main/CHANGELOG.md"
     echo ""
 fi
 exit 0

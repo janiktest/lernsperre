@@ -1,76 +1,69 @@
 # LernSperre
 
-Desktop-App für Ubuntu (GNOME): LernSperre zählt, wie lange du auf YouTube, Instagram, TikTok, Netflix, Reddit oder X/Twitter bist. Nach einer einstellbaren Zeit (Standard 20 min) wird gesperrt, und du musst erst eine Weile (Standard 5 min) in Anki lernen, bevor es weitergeht.
-
-Funktioniert mit Anki-Decks über die offizielle Anki-App (gedacht für das Flatpak `net.ankiweb.Anki`). Es wird kein Anki-Add-on gebraucht.
+Sperrt YouTube, Instagram & Co. nach einer einstellbaren Zeit, bis du in Anki gelernt hast. Für Ubuntu mit GNOME, funktioniert mit der offiziellen Anki-App.
 
 > LernSperre ist ein unabhängiges Projekt und nicht mit Anki oder Ankitects verbunden.
 
-Es ist eine Selbstdisziplin-Sperre, keine Kindersicherung. Wer die Erweiterung oder den Dienst abschaltet, kommt drum herum.
+## Was die App macht
 
-## So funktioniert es
+- Zählt die Zeit, wenn YouTube, Instagram, TikTok, Netflix, Reddit oder X vorne sind oder dort gerade etwas läuft. Die Ziele sind frei einstellbar.
+- Nach der erlaubten Zeit (Standard 20 min) sperrt ein Vollbild-Overlay alles außer Anki.
+- Entsperrt wird nach einer Lernzeit (Standard 5 min) oder einer Anzahl Karten in Anki. Danach beginnt die Zeit von vorn.
+- Restzeit und Menü (Pausieren, Einstellungen, Beenden …) oben rechts in der Leiste.
 
-| Teil | Aufgabe |
-| --- | --- |
-| GNOME-Shell-Erweiterung | meldet alle Fenster (Titel, App-ID, WM_CLASS, Fokus) an den Dienst, zeigt die Restzeit im Panel und legt bei einer Sperre ein Vollbild-Overlay über alles |
-| Hintergrunddienst (Python, systemd-User-Dienst) | zählt die Zeit, liest MPRIS (was gerade abgespielt wird), sperrt und entsperrt, speichert den Zustand in SQLite |
-| Anki (Flatpak) | zum Lernen. Der Dienst liest nur lesend die Sammlung, um zu sehen, wann zuletzt eine Karte beantwortet wurde |
+## Installieren
 
-**Zeit zählt**, wenn ein Ziel-Fenster vorne ist oder gerade etwas von einem Ziel abgespielt wird (z. B. YouTube-Tab im Hintergrund, über MPRIS und den Titel des Browserfensters).
-
-**Während der Sperre** ist nur Anki erlaubt. Jedes andere Fenster wird vom Overlay verdeckt, laufende Wiedergabe wird pausiert. Die Lernzeit zählt nur, solange Anki vorne ist **und** du Karten beantwortest (Pause nach 60 s ohne Antwort). Ist die Lernzeit erreicht, wird entsperrt und der Zähler beginnt von vorn.
-
-1 min vor der Sperre kommt eine Benachrichtigung.
-
-## Installation
-
-Voraussetzungen: Ubuntu mit GNOME (Wayland), Anki als Flatpak.
-
-1. Die neueste `lernsperre_…_all.deb` unter [Releases](https://github.com/janiktest/lernsperre/releases/latest) herunterladen.
-2. Installieren, per Doppelklick im App Center oder im Terminal:
+1. `lernsperre_…_all.deb` unter **[Releases](https://github.com/janiktest/lernsperre/releases/latest)** herunterladen.
+2. Installieren:
    ```bash
    sudo apt install ./Downloads/lernsperre_*_all.deb
    ```
-3. Einmal ab- und wieder anmelden. Danach starten Dienst und GNOME-Erweiterung automatisch (die Erweiterung schaltet sich beim ersten Mal selbst ein).
+3. **Ab- und wieder anmelden.**
 
-Entfernen: `sudo apt remove lernsperre`
+Fertig. Oben rechts in der Leiste steht jetzt z. B. `⏳ 20:00`. Der Dienst und die GNOME-Erweiterung starten ab jetzt bei jeder Anmeldung von selbst.
 
-### Für Entwicklung (ohne .deb)
-
-```bash
-git clone https://github.com/janiktest/lernsperre.git
-cd lernsperre
-./install.sh          # installiert nur für deinen Benutzer
-./uninstall.sh
-./packaging/build-deb.sh   # baut dist/lernsperre_<version>_all.deb
-```
-
-Nicht beides gleichzeitig installieren. Bei jedem Merge nach `main` baut GitHub Actions das .deb und hängt es an das Release der aktuellen Version (`__version__` in `daemon/lernsperre/__init__.py`).
-
-## Bedienung und Einstellungen
-
-Alles Wichtige steht in der **[Anleitung](docs/ANLEITUNG.md)**: Panel-Menü (Pausieren, Einstellungen, Beenden …), alle Einstellungen, Ziele bearbeiten, Befehle und Hilfe bei Problemen.
-
-Kurz:
+**Prüfen, falls nichts erscheint:**
 
 ```bash
-lernsperre status   # Restzeit, was gerade zählt
-lernsperre lock     # Sperre jetzt aktivieren
-lernsperre pause 30 # 30 min pausieren
-lernsperre edit     # Einstellungen öffnen (werden nach dem Speichern automatisch übernommen)
-lernsperre detect-ankis  # alle Anki-Installationen finden, dann: lernsperre use-anki N
-lernsperre hilfe    # alle Befehle
+systemctl --user status lernsperre                       # Dienst läuft? Sonst: systemctl --user start lernsperre
+gnome-extensions info lernsperre@janiktest.github.io     # Erweiterung an? Sonst: gnome-extensions enable lernsperre@janiktest.github.io
 ```
 
-## Entwicklung
+Mehrere Anki-Installationen? `lernsperre detect-ankis`, dann `lernsperre use-anki N`.
+
+## Updaten
+
+Neue .deb genauso installieren. Was danach nötig ist, steht bei jedem [Release](https://github.com/janiktest/lernsperre/releases) und im [Changelog](CHANGELOG.md):
+
+- **Neu anmelden**, wenn sich die GNOME-Erweiterung geändert hat (GNOME lädt sie nur beim Anmelden neu)
+- sonst reicht `systemctl --user restart lernsperre`
+
+Deine Einstellungen bleiben erhalten.
+
+## Entfernen
 
 ```bash
-cd daemon && pytest -q
+sudo apt remove lernsperre
 ```
+
+## Entwickeln
+
+```bash
+git clone https://github.com/janiktest/lernsperre.git && cd lernsperre
+./install.sh              # ohne .deb installieren (nur für deinen Benutzer)
+cd daemon && pytest -q    # Tests
+```
+
+Aufbau, Releases und mehr: [docs/ENTWICKLUNG.md](docs/ENTWICKLUNG.md)
 
 ## Stand
 
-- [x] Schritt 1: Erkennung (Fenster + MPRIS), Zeitzähler, Panel, Warnung, Sperre mit Anki, Installationsskript, .deb mit automatischem Release
-- [x] Panel-Menü mit Pausieren, Einstellungen, Anleitung, Beenden; Entsperren nach Zeit, Karten oder beidem
+- [x] Erkennung, Zeitzähler, Sperre mit Anki, .deb mit automatischen Releases
+- [x] Panel-Menü, Einstellungen, Entsperren nach Zeit oder Karten, mehrere Bildschirme, Anki-Auswahl
 - [ ] Browser-Erweiterung für Firefox (genaue Adresse, Ton im Tab)
 - [ ] Einführung beim ersten Start, Hinweis wenn die Überwachung aus war
+
+## Mehr
+
+- **[Anleitung](docs/ANLEITUNG.md)**: Menü, Einstellungen, Ziele, alle Befehle, Probleme lösen
+- **[Changelog](CHANGELOG.md)**: was sich in welcher Version geändert hat

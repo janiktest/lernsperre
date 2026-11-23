@@ -24,3 +24,8 @@ jobs:
           cp gnome-extension/lernsperre@janiktest.github.io/extension.js /tmp/extension.mjs
           node --check /tmp/extension.mjs
       - run: bash -n install.sh && bash -n uninstall.sh
+      - name: Changelog-Eintrag für die aktuelle Version vorhanden?
+        run: |
+          VERSION=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' daemon/lernsperre/__init__.py)
+          grep -q "^## $VERSION " CHANGELOG.md || { echo "CHANGELOG.md hat keinen Abschnitt für $VERSION"; exit 1; }
+          ./packaging/release-notes.sh "$VERSION" test.deb | grep -q "Nach dem" || { echo "Zeile 'Nach dem Update' fehlt"; exit 1; }
