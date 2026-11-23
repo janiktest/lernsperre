@@ -8,6 +8,8 @@ Jede Version hat eine Zeile **Nach dem Update**: was du nach dem Installieren de
 
 - Panel-Menü: „Dienst neu starten“ (`systemctl --user restart lernsperre`) und „Erweiterung neu laden“ (`gnome-extensions disable/enable`). Fährst du mit der Maus drüber, wird der Befehl angezeigt.
 - Entsperren einfacher einstellen: `unlock_mode` fällt weg. Es zählt, was von `learn_minutes` und `min_cards` nicht auskommentiert ist (beide = beides nötig, keins = 5 min). Deine Datei wird automatisch umgestellt, ohne dass sich etwas ändert.
+- `lernsperre reset-config` setzt die Einstellungen zurück, `lernsperre reset-config --behalten` schreibt sie neu und übersichtlich mit deinen Werten. Die alte Datei wird als `.bak` gesichert.
+- Behoben: Das X/Twitter-Ziel hat „Twitter“ im Fenstertitel nicht erkannt.
 - Tab-Vervollständigung im Terminal: `lernsperre ` und zweimal Tab zeigt alle Befehle (Bash und Zsh, ggf. neues Terminal öffnen)
 
 ## 0.2.0 – 23.11.2026

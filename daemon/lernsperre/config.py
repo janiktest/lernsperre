@@ -110,7 +110,7 @@ urls = ["reddit.com"]
 
 [[targets]]
 name = "X/Twitter"
-titles = ["re:/ X( [—-] |$)", "re:\\bTwitter\\b"]
+titles = ['re:/ X( [—-] |$)', 're:\\bTwitter\\b']
 urls = ["x.com", "twitter.com"]
 """
 
@@ -258,14 +258,65 @@ def migrate_unlock_mode(text: str) -> str:
     return result
 
 
+def upgrade_old_config(text: str) -> str:
+    """Bringt Einstellungsdateien älterer Versionen auf den aktuellen Stand."""
+    # 0.1/0.2: der Twitter-Ausdruck war wegen TOML-Escapes kaputt (\\b = Backspace)
+    text = text.replace('"re:\\bTwitter\\b"', "'re:\\bTwitter\\b'")
+    return migrate_unlock_mode(text)
+
+
 def load_config(path: Path = CONFIG_FILE) -> Config:
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(DEFAULT_CONFIG, encoding="utf-8")
     text = path.read_text(encoding="utf-8")
     cfg = parse_config(text)  # Fehler erst melden, bevor etwas geändert wird
-    updated = add_missing_options(migrate_unlock_mode(text))
+    updated = add_missing_options(upgrade_old_config(text))
     if updated != text:
         path.write_text(updated, encoding="utf-8")
         cfg = parse_config(updated)
     return cfg
+
+
+
+def _toml_value(v) -> str:
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, float):
+        return f"{v:g}"
+    if isinstance(v, int):
+        return str(v)
+    if isinstance(v, str):
+        out = v.replace("\\", "\\\\").replace('"', '\\"')
+        out = "".join(f"\\u{ord(ch):04x}" if ord(ch) < 0x20 else ch for ch in out)
+        return '"' + out + '"'
+    if isinstance(v, list):
+        return "[" + ", ".join(_toml_value(x) for x in v) + "]"
+    raise TypeError(type(v))
+
+
+_OPTION_LINE = re.compile(r"^(?P<off>#\s*)?(?P<key>[a-z_]+)\s*=\s*(?P<value>[^#]*?)(?P<comment>\s+#.*)?$")
+
+
+def fresh_config(keep_from: str | None = None) -> str:
+    """Neue, aufgeräumte Einstellungsdatei. Mit keep_from werden deren Werte übernommen."""
+    if keep_from is None:
+        return DEFAULT_CONFIG
+    old = tomllib.loads(upgrade_old_config(keep_from))
+    head = DEFAULT_CONFIG.partition("[[targets]]")[0]
+    lines = []
+    for line in head.splitlines():
+        m = _OPTION_LINE.match(line)
+        if m:
+            key, comment = m.group("key"), m.group("comment") or ""
+            if key in old:
+                line = f"{key} = {_toml_value(old[key])}{comment}"
+            elif key in ("learn_minutes", "min_cards"):
+                line = f"# {key} = {m.group('value').strip()}{comment}"
+        lines.append(line)
+    text = "\n".join(lines).rstrip("\n") + "\n\n"
+    blocks = []
+    for t in old.get("targets", []):
+        b = ["[[targets]]"] + [f"{k} = {_toml_value(t[k])}" for k in ("name", "titles", "apps", "urls") if k in t]
+        blocks.append("\n".join(b))
+    return text + "\n\n".join(blocks) + "\n"

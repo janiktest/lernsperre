@@ -80,3 +80,27 @@ def test_resolve_launch(tmp_path):
     (tmp_path / "leer").mkdir()
     with pytest.raises(ValueError):
         resolve_launch(str(tmp_path / "leer"))
+
+
+def test_reset_config_with_backup(tmp_path):
+    env = _fake_home(tmp_path)
+    cfg_file = Path(env["XDG_CONFIG_HOME"]) / "lernsperre/config.toml"
+    cfg_file.parent.mkdir(parents=True)
+    old = (DAEMON / "tests/old_config_0_2_0.toml").read_text().replace("allowed_minutes = 20", "allowed_minutes = 35")
+    cfg_file.write_text(old)
+    res = _cli(env, "reset-config", "--behalten")
+    assert res.returncode == 0, res.stderr
+    assert parse_config(cfg_file.read_text()).allowed_minutes == 35
+    assert "unlock_mode" not in cfg_file.read_text()
+    backups = list(cfg_file.parent.glob("config.toml.bak-*"))
+    assert len(backups) == 1 and backups[0].read_text() == old
+    assert _cli(env, "reset-config").returncode == 0
+    assert cfg_file.read_text() == DEFAULT_CONFIG
+
+
+def test_fresh_config_keeps_values_and_targets():
+    from lernsperre.config import fresh_config
+    old = DEFAULT_CONFIG.replace("icon_free = \"⏳\"", "icon_free = \"🎬\"") + '\n[[targets]]\nname = "Twitch"\ntitles = ["Twitch"]\n'
+    cfg = parse_config(fresh_config(old))
+    assert cfg.icon_free == "🎬" and cfg.targets[-1].name == "Twitch" and len(cfg.targets) == 7
+    assert parse_config(fresh_config(DEFAULT_CONFIG)).unlock_mode == "time"

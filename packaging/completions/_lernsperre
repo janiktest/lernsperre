@@ -9,6 +9,7 @@ cmds=(
   'reset:Zähler zurücksetzen / Sperre aufheben'
   'edit:Einstellungen im Texteditor öffnen'
   'config:Pfad der Einstellungsdatei'
+  'reset-config:Einstellungen zurücksetzen (Backup als .bak)'
   'reload:Einstellungen neu laden'
   'detect-ankis:alle Anki-Installationen suchen'
   'use-anki:Anki-Installation Nr. N einstellen'
@@ -22,4 +23,6 @@ if (( CURRENT == 2 )); then
   _describe 'Befehl' cmds
 elif [[ $words[2] == pause ]]; then
   _values 'Minuten' 15 30 60
+elif [[ $words[2] == reset-config ]]; then
+  _values 'Option' '--behalten[deine Werte und Ziele behalten]'
 fi

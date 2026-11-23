@@ -131,6 +131,17 @@ Menü → **Einstellungen** öffnet `~/.config/lernsperre/config.toml` im Texted
 | `anki_desktop_id` | `"net.ankiweb.Anki.desktop"` | Desktop-Datei zum Starten, wenn `anki_launch` leer ist |
 | `anki_collection` | `""` | Pfad zu `collection.anki2`, leer = automatisch (neuestes Profil) |
 
+### Einstellungen zurücksetzen oder aufräumen
+
+Nach ein paar Updates kann die Datei unübersichtlich werden, weil neue Optionen unten angehängt werden.
+
+```bash
+lernsperre reset-config --behalten   # neu und übersichtlich, deine Werte und Ziele bleiben
+lernsperre reset-config              # alles auf Standard
+```
+
+Die alte Datei wird vorher als `~/.config/lernsperre/config.toml.bak-<Datum>` gesichert. Kommentare, die du selbst geschrieben hast, übernimmt `--behalten` nicht, die stehen aber im Backup.
+
 ### Welches Anki?
 
 Hast du mehrere Anki-Installationen (z. B. Flatpak und den Installer von ankiweb.net), kann LernSperre das falsche starten. So stellst du das richtige ein:
@@ -192,6 +203,9 @@ lernsperre edit            Einstellungen im Texteditor öffnen
 lernsperre detect-ankis    alle Anki-Installationen suchen
 lernsperre use-anki N      Installation Nr. N aus detect-ankis einstellen
 lernsperre config          Pfad der Einstellungsdatei ausgeben
+lernsperre reset-config    Einstellungen auf Standard zurücksetzen (Backup als config.toml.bak-…)
+lernsperre reset-config --behalten
+                           Datei neu und übersichtlich schreiben, deine Werte und Ziele bleiben
 lernsperre reload          Einstellungen sofort neu laden (passiert sonst automatisch)
 lernsperre quit            LernSperre beenden (bis zur nächsten Anmeldung)
 lernsperre start           LernSperre wieder starten
