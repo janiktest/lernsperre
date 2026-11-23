@@ -2,6 +2,12 @@
 
 Jede Version hat eine Zeile **Nach dem Update**: was du nach dem Installieren der neuen .deb tun musst.
 
+## 0.2.1 – 23.11.2026
+
+**Nach dem Update:** ab- und wieder anmelden (GNOME-Erweiterung geändert).
+
+- Panel-Menü: „Dienst neu starten“ (`systemctl --user restart lernsperre`) und „Erweiterung neu laden“ (`gnome-extensions disable/enable`). Fährst du mit der Maus drüber, wird der Befehl angezeigt.
+
 ## 0.2.0 – 23.11.2026
 
 **Nach dem Update:** ab- und wieder anmelden (GNOME-Erweiterung geändert).

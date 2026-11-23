@@ -55,6 +55,10 @@ Die Emojis kannst du in den Einstellungen ändern.
 | GitHub-Seite | das Projekt auf GitHub |
 | LernSperre beenden | beendet LernSperre bis zur nächsten Anmeldung (nicht während einer Sperre) |
 | LernSperre starten | erscheint, wenn LernSperre nicht läuft |
+| Dienst neu starten | führt `systemctl --user restart lernsperre` aus, z. B. nach einem Update ohne Änderung an der Erweiterung |
+| Erweiterung neu laden | führt `gnome-extensions disable …` und `enable …` aus, z. B. wenn die Sperre hängt. Neuen Code nach einem Update lädt GNOME trotzdem erst beim Anmelden |
+
+Bei den Einträgen, die einen Befehl ausführen, zeigt das Menü den Befehl an, wenn du mit der Maus darüberfährst.
 
 ---
 
