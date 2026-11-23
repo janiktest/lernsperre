@@ -277,9 +277,9 @@ class Service:
                 self.players_at = now
             if self.ticks % 2 == 0:
                 self._reload()
-            if self.engine.state.mode == "locked" and now - self.last_answer_at >= 2:
-                self.last_answer = self.anki.last_answer(now)
-                self.cards_since_lock = self.anki.cards_since(self.engine.state.lock_started)
+            if self.engine.state.mode == "locked":
+                # jede Sekunde: billig (stat), die Datenbank wird bei Sperre seltener gefragt
+                self.last_answer, self.cards_since_lock = self.anki.poll(now, self.engine.state.lock_started)
                 self.last_answer_at = now
             elif self.engine.state.mode != "locked":
                 self.cards_since_lock = None
@@ -300,6 +300,8 @@ class Service:
                 self._notify("Gleich wird gesperrt", f"Noch {secs} Sekunden, dann ist Lernen in Anki dran.")
             elif kind == "locked":
                 self.cards_since_lock = None
+                self.last_answer = None
+                self.anki.reset()
                 self._notify("Gesperrt", f"{self._unlock_goal()} in Anki, dann geht es weiter.")
                 if self.cfg.pause_media_on_lock:
                     self._pause_players()
@@ -335,6 +337,7 @@ class Service:
         snap["monitoring"] = now - self.windows_at <= WINDOWS_STALE_AFTER
         snap["anki_collection"] = str(self.anki.path) if self.anki.path else ""
         snap["anki_note"] = self.anki.last_error
+        snap["anki_mode"] = self.anki.mode
         try:
             snap["anki_launch_argv"] = resolve_launch(self.cfg.anki_launch)
         except ValueError as e:

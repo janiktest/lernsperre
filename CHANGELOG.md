@@ -2,6 +2,14 @@
 
 Jede Version hat eine Zeile **Nach dem Update**: was du nach dem Installieren der neuen .deb tun musst.
 
+## 0.2.2 – 23.11.2026
+
+**Nach dem Update:** `systemctl --user restart lernsperre` reicht (oder im Panel-Menü „Dienst neu starten“), kein Ab- und Anmelden nötig.
+
+- Behoben: Karten in der Anki-Desktop-App wurden nicht gezählt, die Sperre zeigte „database is locked“. Anki sperrt seine Datenbank, solange es offen ist. LernSperre erkennt Antworten dann an Änderungen der Datei `collection.anki2-wal`. Die Kartenzahl ist in diesem Fall ungefähr (z. B. kann auch Rückgängig mitzählen).
+- Während einer Sperre wird jede Sekunde geprüft.
+- `lernsperre status` zeigt, ob genau oder ungefähr gezählt wird, und wann die letzte Antwort war.
+
 ## 0.2.1 – 23.11.2026
 
 **Nach dem Update:** ab- und wieder anmelden (GNOME-Erweiterung geändert).

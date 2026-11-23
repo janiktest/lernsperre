@@ -63,70 +63,87 @@ def find_collection(configured: str = "", search_dirs: list[Path] | None = None)
 
 
 class AnkiActivity:
+    """Erkennt beantwortete Karten, ohne Anki zu verändern.
+
+    1. Genau: `revlog` lesen (geht, solange Anki die Datenbank nicht exklusiv sperrt).
+    2. Ungefähr: Die Desktop-App von Anki sperrt ihre Datenbank exklusiv
+       ("database is locked"). Dann zählt jede Änderung der WAL-Datei
+       (collection.anki2-wal) als eine Antwort. Anki schreibt beim Beantworten
+       einer Karte, beim bloßen Anzeigen nicht.
+    """
+
+    RETRY_DB_AFTER = 30.0  # nach "locked" so lange nicht erneut versuchen
+
     def __init__(self, configured: str = "", search_dirs: list[Path] | None = None):
         self.configured = configured
         self.search_dirs = search_dirs
         self.path: Path | None = None
-        self._last_wal_mtime: float | None = None
-        self._wal_change_at: float | None = None
-        self.last_error: str = ""
+        self.mode = ""  # "genau", "ungefähr" oder "" (keine Sammlung)
+        self.last_error = ""
+        self._wal_sig: tuple[int, int] | None = None
+        self._changes: list[float] = []
+        self._db_blocked_until = 0.0
 
     def _refresh_path(self) -> None:
         if self.path is None or not self.path.exists():
             self.path = find_collection(self.configured, self.search_dirs)
+            self._wal_sig = None
 
-    def _revlog_last(self) -> float | None:
-        assert self.path is not None
-        uri = f"file:{self.path}?mode=ro"
-        con = sqlite3.connect(uri, uri=True, timeout=0.2)
-        try:
-            row = con.execute("SELECT max(id) FROM revlog").fetchone()
-        finally:
-            con.close()
-        return (row[0] / 1000.0) if row and row[0] else None
-
-    def _wal_last(self, now: float) -> float | None:
+    def _wal_signature(self) -> tuple[int, int] | None:
         assert self.path is not None
         wal = self.path.with_name(self.path.name + "-wal")
-        if not wal.exists():
-            return self._wal_change_at
-        m = wal.stat().st_mtime
-        if self._last_wal_mtime is not None and m != self._last_wal_mtime:
-            self._wal_change_at = min(m, now)
-        self._last_wal_mtime = m
-        return self._wal_change_at
+        try:
+            st = wal.stat()
+        except OSError:
+            return None
+        return (st.st_mtime_ns, st.st_size)
+
+    def reset(self) -> None:
+        """Zu Beginn einer Sperre: bisherige Änderungen vergessen, neu messen."""
+        self._refresh_path()
+        self._changes = []
+        self._wal_sig = self._wal_signature() if self.path else None
+        self._db_blocked_until = 0.0
+
+    def _watch_wal(self, now: float) -> None:
+        sig = self._wal_signature()
+        if sig is not None and self._wal_sig is not None and sig != self._wal_sig:
+            self._changes.append(now)
+            del self._changes[:-500]
+        if sig is not None:
+            self._wal_sig = sig
+
+    def poll(self, now: float, since: float) -> tuple[float | None, int | None]:
+        """(Zeitpunkt der letzten Antwort, Anzahl Antworten seit `since`)."""
+        self._refresh_path()
+        if self.path is None:
+            self.mode, self.last_error = "", "Keine Anki-Sammlung gefunden"
+            return None, None
+        self._watch_wal(now)
+        wal_last = self._changes[-1] if self._changes else None
+        if now >= self._db_blocked_until:
+            try:
+                con = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True, timeout=0.05)
+                try:
+                    last_ms, count = con.execute(
+                        "SELECT max(id), (SELECT count(*) FROM revlog WHERE id >= ?) FROM revlog",
+                        (int(since * 1000),),
+                    ).fetchone()
+                finally:
+                    con.close()
+                self.mode, self.last_error = "genau", ""
+                values = [v for v in ((last_ms / 1000.0) if last_ms else None, wal_last) if v is not None]
+                return (max(values) if values else None), int(count)
+            except sqlite3.Error:
+                self._db_blocked_until = now + self.RETRY_DB_AFTER
+        self.mode, self.last_error = "ungefähr", ""
+        return wal_last, sum(1 for t in self._changes if t >= since)
+
+    # Kurzformen (Tests, Kommandozeile)
+    def last_answer(self, now: float) -> float | None:
+        return self.poll(now, now)[0]
 
     def cards_since(self, ts: float) -> int | None:
-        """Anzahl beantworteter Karten seit ts (Unix-Sekunden), None wenn nicht lesbar.
+        import time
 
-        Auch Antworten vom Handy zählen, sobald sie synchronisiert sind.
-        """
-        self._refresh_path()
-        if self.path is None:
-            return None
-        try:
-            con = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True, timeout=0.2)
-            try:
-                row = con.execute("SELECT count(*) FROM revlog WHERE id >= ?", (int(ts * 1000),)).fetchone()
-            finally:
-                con.close()
-        except sqlite3.Error as e:
-            self.last_error = f"Karten nicht zählbar ({e})"
-            return None
-        return int(row[0])
-
-    def last_answer(self, now: float) -> float | None:
-        """Zeitpunkt (Unix-Sekunden) der letzten Antwort, sonst None."""
-        self._refresh_path()
-        if self.path is None:
-            self.last_error = "Keine Anki-Sammlung gefunden"
-            return None
-        wal = self._wal_last(now)
-        try:
-            rev = self._revlog_last()
-            self.last_error = ""
-        except sqlite3.Error as e:
-            self.last_error = f"revlog nicht lesbar ({e}), nutze WAL-Zeit"
-            rev = None
-        values = [v for v in (rev, wal) if v is not None]
-        return max(values) if values else None
+        return self.poll(time.time(), ts)[1]
