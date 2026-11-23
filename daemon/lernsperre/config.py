@@ -70,7 +70,13 @@ editor = ""
 # Woran das Anki-Fenster erkannt wird (App-ID / WM_CLASS, Teilstring, ohne Groß/klein)
 anki_app_ids = ["net.ankiweb.Anki", "anki"]
 
-# Desktop-Datei zum Starten von Anki
+# Welches Anki gestartet wird. Alle Installationen zeigt `lernsperre detect-ankis`,
+# auswählen mit `lernsperre use-anki N`.
+# Leer = über anki_desktop_id. Sonst ein Befehl (z. B. "flatpak run net.ankiweb.Anki"),
+# ein Programm (z. B. "/usr/local/bin/anki") oder ein Ordner, in dem Anki liegt.
+anki_launch = ""
+
+# Desktop-Datei zum Starten von Anki (wenn anki_launch leer ist)
 anki_desktop_id = "net.ankiweb.Anki.desktop"
 
 # Pfad zu collection.anki2. Leer = automatisch suchen (Flatpak und normale Installation)
@@ -139,6 +145,7 @@ class Config:
     editor: str = ""
     anki_app_ids: list[str] = field(default_factory=lambda: ["net.ankiweb.Anki", "anki"])
     anki_desktop_id: str = "net.ankiweb.Anki.desktop"
+    anki_launch: str = ""
     anki_collection: str = ""
     targets: list[Target] = field(default_factory=list)
 
@@ -176,7 +183,7 @@ def parse_config(text: str) -> Config:
         "pause_media_on_lock", "unlock_mode", "min_cards", "pause_minutes",
         "icon_free", "icon_locked", "icon_paused", "icon_learning",
         "icon_learning_paused", "show_time", "editor",
-        "anki_app_ids", "anki_desktop_id", "anki_collection",
+        "anki_app_ids", "anki_desktop_id", "anki_collection", "anki_launch",
     ):
         if key in raw:
             setattr(cfg, key, raw[key])

@@ -12,7 +12,7 @@ gi.require_version("Gio", "2.0")
 from gi.repository import Gio, GLib  # noqa: E402
 
 from . import __version__  # noqa: E402
-from .anki import AnkiActivity  # noqa: E402
+from .anki import AnkiActivity, resolve_launch  # noqa: E402
 from .config import CONFIG_FILE, DATA_DIR, load_config  # noqa: E402
 from .engine import Engine, Signals, State  # noqa: E402
 from .matcher import Player, Window  # noqa: E402
@@ -335,6 +335,11 @@ class Service:
         snap["monitoring"] = now - self.windows_at <= WINDOWS_STALE_AFTER
         snap["anki_collection"] = str(self.anki.path) if self.anki.path else ""
         snap["anki_note"] = self.anki.last_error
+        try:
+            snap["anki_launch_argv"] = resolve_launch(self.cfg.anki_launch)
+        except ValueError as e:
+            snap["anki_launch_argv"] = []
+            snap["anki_note"] = str(e)
         snap["last_answer_ago"] = round(now - self.last_answer) if self.last_answer else None
         fw = self._signals(now).focused
         snap["focused_window"] = (

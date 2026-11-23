@@ -73,9 +73,10 @@ Hinweis: Firefox zeigt im Fenstertitel nur den **aktiven Tab**. Ein YouTube-Tab 
 
 ## 4. Die Sperre
 
-- Ein Vollbild-Overlay liegt über allem. **Nur Anki ist erlaubt.** Wechselst du zu einem anderen Fenster, kommt das Overlay sofort zurück.
+- Ein Vollbild-Overlay liegt über allem, bei mehreren Bildschirmen über allen. Text und Knöpfe stehen nur auf dem Hauptbildschirm, die anderen werden abgedunkelt. **Nur Anki ist erlaubt.** Wechselst du zu einem anderen Fenster, kommt das Overlay sofort zurück.
 - Laufende Wiedergabe (Video, Musik) wird pausiert.
 - Mit **„Anki öffnen“** kommst du zu Anki. Läuft Anki schon, wird nur das Fenster nach vorne geholt. Das Deck wählst du in Anki selbst.
+- Welches Anki gestartet wird, stellst du mit `anki_launch` ein (siehe [Welches Anki?](#welches-anki)).
 
 ### Wie du entsperrst
 
@@ -117,8 +118,28 @@ Menü → **Einstellungen** öffnet `~/.config/lernsperre/config.toml` im Texted
 | `show_time` | `true` | Zeit neben dem Emoji anzeigen |
 | `editor` | `""` | Programm für „Einstellungen“, z. B. `"gedit"`. Leer = Standard-Texteditor |
 | `anki_app_ids` | `["net.ankiweb.Anki", "anki"]` | woran das Anki-Fenster erkannt wird |
-| `anki_desktop_id` | `"net.ankiweb.Anki.desktop"` | womit Anki gestartet wird |
+| `anki_launch` | `""` | welches Anki gestartet wird: Befehl, Programm oder Ordner (siehe unten). Leer = über `anki_desktop_id` |
+| `anki_desktop_id` | `"net.ankiweb.Anki.desktop"` | Desktop-Datei zum Starten, wenn `anki_launch` leer ist |
 | `anki_collection` | `""` | Pfad zu `collection.anki2`, leer = automatisch (neuestes Profil) |
+
+### Welches Anki?
+
+Hast du mehrere Anki-Installationen (z. B. Flatpak und den Installer von ankiweb.net), kann LernSperre das falsche starten. So stellst du das richtige ein:
+
+```bash
+lernsperre detect-ankis     # listet alle gefundenen Installationen mit Nummer
+lernsperre use-anki 2       # Nummer 2 benutzen
+```
+
+`detect-ankis` sucht Flatpak, Snap, deb-Pakete, den Installer bzw. Launcher von ankiweb.net (`/usr/local/bin/anki`, `~/.local/share/AnkiProgramFiles`), `/opt/anki*`, pip/uv (`~/.local/bin/anki`) und AppImages in `~/Applications`, `~/Downloads` und `~`. Zu jeder Installation zeigt es den Datenordner und die Profile.
+
+`use-anki` trägt `anki_launch` und `anki_collection` (zuletzt benutztes Profil) in deine Einstellungen ein. Von Hand geht es auch:
+
+```toml
+anki_launch = "flatpak run net.ankiweb.Anki"   # ein Befehl
+anki_launch = "/usr/local/bin/anki"            # ein Programm
+anki_launch = "~/Programme/anki-25.02"         # ein Ordner, in dem Anki liegt
+```
 
 ### Ziele bearbeiten
 
@@ -157,6 +178,8 @@ lernsperre pause [MIN]     MIN Minuten pausieren (Standard 30, nicht während ei
 lernsperre resume          Pause beenden
 lernsperre reset           Zähler zurücksetzen bzw. Sperre aufheben (Notfall)
 lernsperre edit            Einstellungen im Texteditor öffnen
+lernsperre detect-ankis    alle Anki-Installationen suchen
+lernsperre use-anki N      Installation Nr. N aus detect-ankis einstellen
 lernsperre config          Pfad der Einstellungsdatei ausgeben
 lernsperre reload          Einstellungen sofort neu laden (passiert sonst automatisch)
 lernsperre quit            LernSperre beenden (bis zur nächsten Anmeldung)
@@ -195,6 +218,7 @@ gnome-extensions enable lernsperre@janiktest.github.io      # Erweiterung einsch
 | --- | --- |
 | Kein Symbol oben rechts | einmal ab- und wieder anmelden; dann `gnome-extensions enable lernsperre@janiktest.github.io` |
 | Symbol zeigt `LS –` | Menü → „LernSperre starten“ oder `lernsperre start` |
+| Falsches Anki wird geöffnet | `lernsperre detect-ankis`, dann `lernsperre use-anki N` |
 | Lernzeit läuft nicht, obwohl ich lerne | Anki muss vorne sein. `lernsperre status` zeigt, ob die Anki-Sammlung gefunden wurde; sonst in den Einstellungen `anki_collection` setzen |
 | Eine Seite wird nicht erkannt | als Ziel mit einem Wort aus dem Fenstertitel eintragen |
 | Etwas wird fälschlich gezählt | `lernsperre status` zeigt, welches Ziel zählt; den passenden Eintrag in `titles` genauer machen |

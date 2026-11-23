@@ -10,6 +10,7 @@ einer Karte aber nicht.
 from __future__ import annotations
 
 import os
+import shlex
 import sqlite3
 from pathlib import Path
 
@@ -20,12 +21,35 @@ SEARCH_DIRS = [
 ]
 
 
+def resolve_launch(spec: str) -> list[str]:
+    """Wandelt anki_launch (Befehl, Programm oder Ordner) in eine Befehlszeile um."""
+    spec = spec.strip()
+    if not spec:
+        return []
+    path = Path(spec).expanduser()
+    if path.is_dir():
+        for rel in ("anki", "bin/anki", ".venv/bin/anki", "AppRun"):
+            exe = path / rel
+            if exe.is_file() and os.access(exe, os.X_OK):
+                return [str(exe)]
+        images = sorted(path.glob("*.AppImage"))
+        if images:
+            return [str(images[0])]
+        raise ValueError(f"In {path} wurde kein Anki-Programm gefunden")
+    if path.is_file():
+        return [str(path)]
+    return shlex.split(spec)
+
+
 def find_collection(configured: str = "", search_dirs: list[Path] | None = None) -> Path | None:
     if configured:
         p = Path(configured).expanduser()
         return p if p.exists() else None
     candidates: list[Path] = []
-    for d in search_dirs or SEARCH_DIRS:
+    dirs = list(search_dirs or SEARCH_DIRS)
+    if search_dirs is None:
+        dirs += list(HOME.glob("snap/*/*/.local/share/Anki2"))  # Snap
+    for d in dirs:
         if d.is_dir():
             candidates.extend(d.glob("*/collection.anki2"))
     if not candidates:

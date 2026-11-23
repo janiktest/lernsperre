@@ -389,12 +389,15 @@ export default class LernSperreExtension extends Extension {
             reactive: true,
             can_focus: true,
             visible: false,
-            layout_manager: new Clutter.BinLayout(),
         });
+        // Das Overlay dunkelt alle Bildschirme ab; Text und Knöpfe stehen nur
+        // auf dem Hauptbildschirm (this._primaryArea).
         this._overlay.add_constraint(new Clutter.BindConstraint({
             source: global.stage,
             coordinate: Clutter.BindCoordinate.ALL,
         }));
+        this._primaryArea = new St.Widget({layout_manager: new Clutter.BinLayout()});
+        this._overlay.add_child(this._primaryArea);
 
         const box = new St.BoxLayout({
             orientation: Clutter.Orientation.VERTICAL,
@@ -440,8 +443,20 @@ export default class LernSperreExtension extends Extension {
             opacity: 140,
         }));
 
-        this._overlay.add_child(box);
+        this._primaryArea.add_child(box);
         Main.layoutManager.addTopChrome(this._overlay);
+        this._placeOverlay();
+        this._signals.push([Main.layoutManager,
+            Main.layoutManager.connect('monitors-changed', () => this._placeOverlay())]);
+    }
+
+    _placeOverlay() {
+        const m = Main.layoutManager.primaryMonitor;
+        if (!m || !this._primaryArea)
+            return;
+        this._primaryArea.set_position(m.x, m.y);
+        this._primaryArea.set_size(m.width, m.height);
+        this._hintLabel.style = `max-width: ${Math.round(m.width * 0.6)}px;`;
     }
 
     _setOverlayVisible(show) {
@@ -466,6 +481,31 @@ export default class LernSperreExtension extends Extension {
             Main.popModal(this._grab);
             this._grab = null;
         }
+    }
+
+    _launchAnki() {
+        // 1. Läuft Anki schon? Dann nur nach vorne holen.
+        const running = global.get_window_actors()
+            .map(a => a.meta_window)
+            .filter(w => w && w.get_window_type() === Meta.WindowType.NORMAL && this._isAnki(w))
+            .sort((a, b) => b.get_user_time() - a.get_user_time());
+        if (running.length) {
+            Main.activateWindow(running[0]);
+            return;
+        }
+        // 2. Eigener Befehl aus den Einstellungen (anki_launch)
+        const cmd = this._state?.anki_launch_argv ?? [];
+        if (cmd.length) {
+            Gio.Subprocess.new(cmd, Gio.SubprocessFlags.NONE);
+            return;
+        }
+        // 3. Desktop-Datei (anki_desktop_id), sonst Flatpak
+        const desktopId = this._state?.anki_desktop_id ?? 'net.ankiweb.Anki.desktop';
+        const app = Shell.AppSystem.get_default().lookup_app(desktopId);
+        if (app)
+            app.activate();
+        else
+            Gio.Subprocess.new(['flatpak', 'run', 'net.ankiweb.Anki'], Gio.SubprocessFlags.NONE);
     }
 
     _onEmergency() {
@@ -493,13 +533,8 @@ export default class LernSperreExtension extends Extension {
         this._graceUntil = Date.now() + ANKI_START_GRACE_MS;
         this._setOverlayVisible(false);
 
-        const desktopId = this._state?.anki_desktop_id ?? 'net.ankiweb.Anki.desktop';
-        const app = Shell.AppSystem.get_default().lookup_app(desktopId);
         try {
-            if (app)
-                app.activate();
-            else
-                Gio.Subprocess.new(['flatpak', 'run', 'net.ankiweb.Anki'], Gio.SubprocessFlags.NONE);
+            this._launchAnki();
         } catch (e) {
             console.error(`LernSperre: Anki konnte nicht gestartet werden: ${e}`);
             this._graceUntil = 0;

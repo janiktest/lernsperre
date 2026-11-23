@@ -58,6 +58,7 @@ lernsperre status   # Restzeit, was gerade zählt
 lernsperre lock     # Sperre jetzt aktivieren
 lernsperre pause 30 # 30 min pausieren
 lernsperre edit     # Einstellungen öffnen (werden nach dem Speichern automatisch übernommen)
+lernsperre detect-ankis  # alle Anki-Installationen finden, dann: lernsperre use-anki N
 lernsperre hilfe    # alle Befehle
 ```
 
