@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    # Autostart für alle Benutzer beim Anmelden
+    systemctl --global enable lernsperre.service >/dev/null 2>&1 || true
+    echo ""
+    echo "LernSperre ist installiert."
+    echo "Bitte einmal ab- und wieder anmelden. Danach laufen Dienst und GNOME-Erweiterung automatisch."
+    echo ""
+fi
+exit 0

@@ -36,6 +36,7 @@ IFACE_XML = f"""
 </node>
 """
 
+EXTENSION_UUID = "lernsperre@janiktest.github.io"
 WINDOWS_STALE_AFTER = 15.0  # Sekunden ohne Meldung der GNOME-Erweiterung
 MPRIS_PREFIX = "org.mpris.MediaPlayer2."
 
@@ -79,6 +80,35 @@ class Service:
         self.conn = conn
         node = Gio.DBusNodeInfo.new_for_xml(IFACE_XML)
         conn.register_object(OBJECT_PATH, node.interfaces[0], self._on_method_call, None, None)
+        if not self.store.get("extension_auto_enabled"):
+            self._enable_tries = 0
+            GLib.timeout_add_seconds(5, self._try_enable_extension)
+
+    def _try_enable_extension(self) -> bool:
+        """Schaltet die GNOME-Erweiterung einmalig ein (z. B. nach Installation per .deb).
+
+        Später respektiert LernSperre es, wenn du sie selbst wieder ausschaltest.
+        """
+        self._enable_tries += 1
+        try:
+            info = self.conn.call_sync(
+                "org.gnome.Shell.Extensions", "/org/gnome/Shell", "org.gnome.Shell.Extensions",
+                "GetExtensionInfo", GLib.Variant("(s)", (EXTENSION_UUID,)),
+                GLib.VariantType("(a{sv})"), Gio.DBusCallFlags.NONE, 2000, None,
+            ).unpack()[0]
+            if info:  # GNOME kennt die Erweiterung (nach Neuanmeldung)
+                ok = self.conn.call_sync(
+                    "org.gnome.Shell.Extensions", "/org/gnome/Shell", "org.gnome.Shell.Extensions",
+                    "EnableExtension", GLib.Variant("(s)", (EXTENSION_UUID,)),
+                    GLib.VariantType("(b)"), Gio.DBusCallFlags.NONE, 2000, None,
+                ).unpack()[0]
+                if ok:
+                    self.store.set("extension_auto_enabled", "1")
+                    log.info("GNOME-Erweiterung eingeschaltet")
+                    return False
+        except GLib.Error as e:
+            log.debug("Erweiterung einschalten: %s", e.message)
+        return self._enable_tries < 30  # etwa 5 min lang versuchen
 
     def _on_name_lost(self, conn, name) -> None:
         log.error("D-Bus-Name %s nicht verfügbar (läuft LernSperre schon?)", name)

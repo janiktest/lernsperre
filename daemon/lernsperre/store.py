@@ -33,6 +33,18 @@ class Store:
         )
         self.con.commit()
 
+    def get(self, key: str) -> str | None:
+        row = self.con.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+        return row[0] if row else None
+
+    def set(self, key: str, value: str) -> None:
+        self.con.execute(
+            "INSERT INTO kv(key, value) VALUES(?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, value),
+        )
+        self.con.commit()
+
     def log(self, kind: str, detail: str = "", ts: float | None = None) -> None:
         self.con.execute(
             "INSERT INTO events(ts, kind, detail) VALUES(?, ?, ?)",
