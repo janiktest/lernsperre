@@ -1,0 +1,16 @@
+Package: lernsperre
+Version: @VERSION@
+Section: utils
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.11), python3-gi, gnome-shell (>= 48)
+Recommends: flatpak
+Maintainer: Janik Weber <janiktest@users.noreply.github.com>
+Homepage: https://github.com/janiktest/lernsperre
+Description: Sperrt Ablenkungen, bis in Anki gelernt wurde
+ LernSperre zählt die Zeit auf YouTube, Instagram, TikTok, Netflix, Reddit
+ und X/Twitter. Nach einer einstellbaren Zeit wird gesperrt, bis eine Weile in
+ Anki gelernt wurde. Funktioniert mit der offiziellen Anki-App (Flatpak).
+ .
+ LernSperre ist ein unabhängiges Projekt und nicht mit Anki oder Ankitects
+ verbunden.
