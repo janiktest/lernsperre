@@ -190,6 +190,7 @@ def main(argv: list[str] | None = None) -> None:
             print(f"Vorderes Fenster: {fw['title']} (App-ID: {fw['app_id'] or '–'}, WM_CLASS: {fw['wm_class'] or '–'})")
         for p in s["players"]:
             print(f"Wiedergabe: {p['name']} – {'läuft' if p['playing'] else 'pausiert'} – {p['title']}")
+        print("\nAlle Befehle: lernsperre hilfe (oder: lernsperre + zweimal Tab)")
 
 
 if __name__ == "__main__":

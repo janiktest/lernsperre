@@ -32,6 +32,9 @@ PYTHONPATH="$APP_DIR" exec /usr/bin/python3 -m lernsperre "\$@"
 EOF
 chmod +x "$BIN_DIR/lernsperre"
 
+echo "==> Tab-Vervollständigung"
+install -D -m 644 packaging/completions/lernsperre.bash "$HOME/.local/share/bash-completion/completions/lernsperre"
+
 echo "==> Einstellungen anlegen (falls noch nicht vorhanden)"
 PYTHONPATH="$APP_DIR" /usr/bin/python3 -m lernsperre config
 

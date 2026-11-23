@@ -1,0 +1,25 @@
+#compdef lernsperre
+# Zsh-Vervollständigung für lernsperre
+local -a cmds
+cmds=(
+  'status:verbleibende Zeit, was gerade zählt'
+  'lock:Sperre jetzt aktivieren'
+  'pause:Zählen pausieren (Minuten)'
+  'resume:Pause beenden'
+  'reset:Zähler zurücksetzen / Sperre aufheben'
+  'edit:Einstellungen im Texteditor öffnen'
+  'config:Pfad der Einstellungsdatei'
+  'reload:Einstellungen neu laden'
+  'detect-ankis:alle Anki-Installationen suchen'
+  'use-anki:Anki-Installation Nr. N einstellen'
+  'quit:LernSperre beenden'
+  'start:LernSperre starten'
+  'json:Zustand als JSON'
+  'run:im Vordergrund starten'
+  'hilfe:alle Befehle'
+)
+if (( CURRENT == 2 )); then
+  _describe 'Befehl' cmds
+elif [[ $words[2] == pause ]]; then
+  _values 'Minuten' 15 30 60
+fi

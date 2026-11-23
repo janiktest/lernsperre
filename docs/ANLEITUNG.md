@@ -174,6 +174,8 @@ Titel, App-ID und WM_CLASS des Fensters, das gerade vorne ist, zeigt `lernsperre
 
 ## 6. Befehle im Terminal
 
+Tipp: `lernsperre ` tippen und zweimal **Tab** drücken, dann werden alle Befehle vorgeschlagen.
+
 ```text
 lernsperre                 Zustand anzeigen
 lernsperre status          verbleibende Zeit, was gerade zählt, Sperre
