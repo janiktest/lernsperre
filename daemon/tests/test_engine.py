@@ -203,3 +203,27 @@ def test_cards_since(tmp_path):
     con.commit()
     act = AnkiActivity(search_dirs=[tmp_path])
     assert act.cards_since(1500) == 2
+
+
+def test_anki_activity_when_anki_locks_database(tmp_path):
+    """Die Anki-Desktop-App sperrt ihre Datenbank exklusiv; dann zählen WAL-Änderungen."""
+    prof = tmp_path / "Benutzer 1"
+    prof.mkdir()
+    anki = sqlite3.connect(prof / "collection.anki2", isolation_level=None)
+    anki.execute("PRAGMA locking_mode=exclusive")
+    anki.execute("PRAGMA journal_mode=wal")
+    anki.execute("CREATE TABLE revlog (id INTEGER PRIMARY KEY, cid INTEGER)")
+    act = AnkiActivity(search_dirs=[tmp_path])
+    act.reset()
+    t0 = time.time()
+    assert act.poll(t0, t0) == (None, 0)
+    assert act.mode == "ungefähr"
+    for i in range(3):  # drei Antworten
+        anki.execute("INSERT INTO revlog VALUES (?, 1)", (int(time.time() * 1000) + i,))
+        last, cards = act.poll(t0 + 2 + i, t0)
+        assert last == t0 + 2 + i and cards == i + 1
+    assert act.poll(t0 + 10, t0) == (t0 + 4, 3)  # nichts Neues
+    anki.close()
+    # Anki zu: wieder genau lesen (nach der Wartezeit)
+    last, cards = act.poll(t0 + 100, t0)
+    assert act.mode == "genau" and cards == 3

@@ -205,6 +205,10 @@ def main(argv: list[str] | None = None) -> None:
                 print(f"  Karten: {s['cards_done']} von {s['min_cards']}")
             if s["anki_collection"]:
                 print("Anki-Sammlung:", s["anki_collection"])
+            if s.get("anki_mode") == "ungefähr":
+                print("Antworten werden über Dateiänderungen erkannt (Anki sperrt seine Datenbank), Kartenzahl ungefähr")
+            if s.get("last_answer_ago") is not None:
+                print(f"Letzte Antwort vor {s['last_answer_ago']} s")
             if s.get("anki_launch_argv"):
                 print("Anki-Start:", " ".join(s["anki_launch_argv"]))
             if s["anki_note"]:

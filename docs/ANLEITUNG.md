@@ -100,6 +100,8 @@ learn_minutes = 5      # Lernzeit in Minuten
 
 Gezählt wird nur, was nach Beginn der Sperre beantwortet wurde. LernSperre liest dafür nur lesend in deiner Anki-Sammlung (Tabelle `revlog`). Es wird kein Anki-Add-on gebraucht und nichts in Anki verändert.
 
+Während einer Sperre prüft LernSperre jede Sekunde. Ist Anki geschlossen, wird genau gezählt (`revlog`). Solange die Anki-Desktop-App offen ist, sperrt sie ihre Datenbank; dann erkennt LernSperre Antworten an Änderungen der Datei `collection.anki2-wal`. Das ist ungefähr: Auch z. B. Rückgängig oder das Bearbeiten einer Karte kann als Antwort zählen. `lernsperre status` zeigt, welche Art gerade benutzt wird.
+
 ### Notfall
 
 Unten auf dem Overlay ist **„Notfall: Sperre aufheben“**. Zweimal klicken hebt die Sperre auf, z. B. wenn Anki nicht startet. Ohne Overlay geht im Terminal `lernsperre reset`.
