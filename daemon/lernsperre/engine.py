@@ -96,6 +96,7 @@ class Engine:
         self.learning_active = False
         self.anki_focused = False
         self.now = 0.0
+        self.bonus_blocker: str | None = None  # Ziel, das gerade läuft (auch während Pause)
 
     # --- Aktionen -------------------------------------------------------
     def lock(self, now: float) -> list[tuple]:
@@ -106,7 +107,10 @@ class Engine:
         self.state.cards_done = 0
         self.state.lock_started = now
         self.state.paused_until = 0.0
-        return [("locked",)]
+        events = [("locked",)]
+        if self.state.bonus_on:
+            events += self._stop_bonus("Die Sperre hat begonnen. Nach dem Entsperren kannst du sie wieder einschalten.")
+        return events
 
     def unlock(self) -> list[tuple]:
         self.state.mode = "free"
@@ -123,13 +127,24 @@ class Engine:
         self.state.bonus_rewards = 0
 
     def set_bonus(self, now: float, on: bool) -> list[tuple]:
-        """Bonuszeit an/aus. Gezählt werden nur Karten ab dem Einschalten."""
+        """Bonuszeit an/aus. Gezählt werden nur Karten ab dem Einschalten.
+
+        Einschalten geht nicht, solange ein Ziel läuft oder gesperrt ist.
+        """
         if self.state.bonus_on == on:
             return []
+        if on and self.state.mode == "locked":
+            return [("bonus_refused", "Während einer Sperre geht das nicht, die Karten zählen gerade fürs Entsperren.")]
+        if on and self.bonus_blocker:
+            return [("bonus_refused", f"{self.bonus_blocker} läuft gerade. Erst schließen oder anhalten, dann einschalten.")]
         self.state.bonus_on = on
         if on:
             self._restart_bonus(now)
         return [("bonus", on)]
+
+    def _stop_bonus(self, reason: str) -> list[tuple]:
+        self.state.bonus_on = False
+        return [("bonus_stopped", reason)]
 
     def bonus_counting(self) -> bool:
         return self.state.bonus_on and self.state.mode == "free"
@@ -179,6 +194,10 @@ class Engine:
         if st.mode == "free" and st.paused_until and now >= st.paused_until:
             st.paused_until = 0.0
             events.append(("resumed",))
+        # Bonuszeit: endet, sobald ein Ziel (z. B. ein YouTube-Video) vorne ist oder abspielt
+        self.bonus_blocker = detect_activity(self.cfg, sig).target if st.mode == "free" else None
+        if self.bonus_counting() and self.bonus_blocker:
+            events += self._stop_bonus(f"{self.bonus_blocker} wurde geöffnet. Bonuszeit gibt es nur, solange nichts davon läuft.")
         if self.bonus_counting() and sig.cards_since_bonus is not None:
             st.bonus_cards = max(st.bonus_cards, sig.cards_since_bonus)
             due = st.bonus_cards // self.cfg.bonus_cards

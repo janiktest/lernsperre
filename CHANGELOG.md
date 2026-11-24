@@ -7,6 +7,7 @@ Jede Version hat eine Zeile **Nach dem Update**: was du nach dem Installieren de
 **Nach dem Update:** ab- und wieder anmelden (GNOME-Erweiterung geändert).
 
 - Neu: Bonuszeit durch freiwilliges Lernen. Schalter „Bonuszeit durch Lernen“ im Panel-Menü oder `lernsperre bonus an|aus`. Ist er an, bringen je `bonus_cards` Karten (Standard 10) außerhalb einer Sperre `bonus_minutes` (Standard 5) mehr erlaubte Zeit. Der Fortschritt steht oben im Menü und in `lernsperre status`.
+- Der Modus lässt sich nicht einschalten, solange ein Ziel läuft, und schaltet sich aus, sobald ein Ziel geöffnet wird, etwas abspielt oder eine Sperre beginnt. Eine Benachrichtigung nennt jeweils den Grund.
 - Die Kopie der Anki-Sammlung wird außerhalb einer Sperre nur benutzt, wenn der Schalter an ist.
 - Die neuen Einstellungen `bonus_cards` und `bonus_minutes` werden automatisch in deine Datei eingefügt.
 

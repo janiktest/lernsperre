@@ -162,8 +162,13 @@ class Service:
                 invocation.return_value(None)
             elif method == "SetBonus":
                 (on,) = params.unpack()
-                self._handle(self.engine.set_bonus(time.time(), bool(on)))
-                invocation.return_value(None)
+                events = self.engine.set_bonus(time.time(), bool(on))
+                self._handle(events)
+                refused = [ev[1] for ev in events if ev[0] == "bonus_refused"]
+                if refused:
+                    invocation.return_dbus_error(f"{IFACE}.Error", refused[0])
+                else:
+                    invocation.return_value(None)
             elif method == "Resume":
                 self._handle(self.engine.resume())
                 invocation.return_value(None)
@@ -336,6 +341,13 @@ class Service:
                 else:
                     self.cards_since_bonus = None
                     self.anki.cleanup()
+            elif kind in ("bonus_refused", "bonus_stopped"):
+                if kind == "bonus_stopped":
+                    self.cards_since_bonus = None
+                    if self.engine.state.mode != "locked":
+                        self.anki.cleanup()
+                title = "Bonuszeit nicht eingeschaltet" if kind == "bonus_refused" else "Bonuszeit beendet"
+                self._notify(title, ev[1])
             elif kind == "bonus_gained":
                 self._notify("Bonuszeit", f"+{ev[1]:g} min, gut gelernt! Noch {int(self.engine.snapshot()['remaining'] // 60)} min erlaubt.")
             elif kind == "pause_media":

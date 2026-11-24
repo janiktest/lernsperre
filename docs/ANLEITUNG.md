@@ -107,6 +107,13 @@ Während einer Sperre prüft LernSperre jede Sekunde. Solange die Anki-Desktop-A
 
 Im Menü gibt es den Schalter **„Bonuszeit durch Lernen“** (oder `lernsperre bonus an` / `aus`). Ist er an, bringen je `bonus_cards` Karten (Standard 10), die du außerhalb einer Sperre in Anki beantwortest, `bonus_minutes` (Standard 5) mehr erlaubte Zeit. Es zählen nur Karten ab dem Einschalten bzw. ab dem letzten Entsperren. Die Restzeit kann dadurch auch über `allowed_minutes` steigen. Den Fortschritt zeigt die erste Zeile im Menü.
 
+Damit Bonuszeit nicht nebenbei beim Schauen entsteht:
+- Läuft gerade ein Ziel (z. B. YouTube vorne oder ein Video im Hintergrund), lässt sich der Modus nicht einschalten.
+- Wird ein Ziel geöffnet oder spielt etwas ab, während er an ist, schaltet er sich sofort aus. Das gilt auch während einer Pause.
+- Beginnt eine Sperre, schaltet er sich aus. Nach dem Entsperren kannst du ihn wieder einschalten.
+
+In allen drei Fällen sagt dir eine Benachrichtigung, warum.
+
 Nur solange der Schalter an ist, liest LernSperre auch außerhalb einer Sperre in Anki mit (über die Kopie in `~/.cache/lernsperre`). Ist er aus, passiert das nur während einer Sperre.
 
 ### Notfall

@@ -280,3 +280,34 @@ def test_bonus_options_in_config():
     from lernsperre.config import add_missing_options
     old = 'allowed_minutes = 10\n\n[[targets]]\nname = "YouTube"\ntitles = ["YouTube"]\n'
     assert "bonus_cards = 10" in add_missing_options(old)
+
+
+def test_bonus_stops_when_target_starts_and_refuses_while_running():
+    e = Engine(cfg_with(bonus_cards=10, bonus_minutes=5))
+    e.tick(0, 1, Signals(windows=[FF_YT]))
+    ev = e.set_bonus(1, True)
+    assert ev[0][0] == "bonus_refused" and "YouTube" in ev[0][1] and not e.state.bonus_on
+    e.tick(2, 1, Signals(windows=[ANKI]))
+    assert e.set_bonus(3, True) == [("bonus", True)]
+    # YouTube im Hintergrund abspielen beendet den Modus auch
+    yt_bg = Window(title="Musik – YouTube — Mozilla Firefox", app_id="firefox_firefox")
+    ff = Player("org.mpris.MediaPlayer2.firefox.instance_1_2", playing=True, desktop_entry="firefox", title="Musik")
+    ev = e.tick(4, 1, Signals(windows=[ANKI, yt_bg], players=[ff], cards_since_bonus=10))
+    assert ev[0][0] == "bonus_stopped" and "YouTube" in ev[0][1]
+    assert not e.state.bonus_on and e.state.bonus_rewards == 0  # keine Bonuszeit mehr gutgeschrieben
+
+
+def test_bonus_stops_on_lock_and_cannot_start_while_locked():
+    e = Engine(CFG)
+    e.set_bonus(0, True)
+    ev = e.lock(5)
+    assert ("locked",) in ev and any(k == "bonus_stopped" for k, *_ in ev) and not e.state.bonus_on
+    assert e.set_bonus(6, True)[0][0] == "bonus_refused"
+
+
+def test_bonus_also_stops_while_paused():
+    e = Engine(CFG)
+    e.set_bonus(0, True)
+    e.pause(1, 15)
+    ev = e.tick(2, 1, Signals(windows=[FF_YT]))
+    assert any(k == "bonus_stopped" for k, *_ in ev)
