@@ -16,6 +16,7 @@ LernSperre – Befehle
   lernsperre lock            Sperre jetzt aktivieren
   lernsperre pause [MIN]     Zählen für MIN Minuten pausieren (Standard 30, nicht während einer Sperre)
   lernsperre resume          Pause beenden
+  lernsperre bonus an|aus    Bonuszeit durch freiwilliges Lernen an- oder ausschalten
   lernsperre reset           Zähler zurücksetzen bzw. Sperre aufheben (Notfall)
   lernsperre edit            Einstellungen im Texteditor öffnen
   lernsperre detect-ankis    alle Anki-Installationen suchen (Flatpak, Snap, deb, Installer, pip, AppImage)
@@ -75,11 +76,17 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument(
         "command", nargs="?", default="status",
         choices=["run", "status", "lock", "pause", "resume", "reset", "reload", "edit",
-                 "config", "quit", "start", "json", "hilfe", "help", "detect-ankis", "use-anki", "reset-config"],
+                 "config", "quit", "start", "json", "hilfe", "help", "detect-ankis", "use-anki", "reset-config", "bonus"],
     )
-    ap.add_argument("number", nargs="?", type=int, default=None, help="Minuten für pause, Nummer für use-anki")
+    ap.add_argument("arg", nargs="?", default=None, help="Minuten für pause, Nummer für use-anki, an/aus für bonus")
     ap.add_argument("--behalten", action="store_true", help="bei reset-config: eigene Werte und Ziele übernehmen")
     args = ap.parse_args(argv)
+    args.number = None
+    if args.arg is not None and args.command != "bonus":
+        try:
+            args.number = int(args.arg)
+        except ValueError:
+            ap.error(f"{args.arg!r} ist keine Zahl")
 
     minutes = args.number if args.number is not None else 30
     if args.command == "reset-config":
@@ -170,6 +177,18 @@ def main(argv: list[str] | None = None) -> None:
 
         _call("Pause", GLib.Variant("(u)", (max(1, minutes),)))
         print(f"Pausiert für {minutes} min")
+    elif args.command == "bonus":
+        import gi
+
+        gi.require_version("GLib", "2.0")
+        from gi.repository import GLib
+
+        if args.arg not in ("an", "aus", "on", "off"):
+            print("Bitte: lernsperre bonus an  oder  lernsperre bonus aus", file=sys.stderr)
+            sys.exit(1)
+        on = args.arg in ("an", "on")
+        _call("SetBonus", GLib.Variant("(b)", (on,)))
+        print("Bonuszeit an" if on else "Bonuszeit aus")
     elif args.command in ("resume", "quit"):
         _call({"resume": "Resume", "quit": "Quit"}[args.command])
         print("OK")
@@ -217,6 +236,9 @@ def main(argv: list[str] | None = None) -> None:
             print(f"Pausiert – noch {_fmt(s['paused_remaining'])}, danach noch {_fmt(s['remaining'])} erlaubt")
         else:
             print(f"Frei – noch {_fmt(s['remaining'])} von {_fmt(s['allowed'])} erlaubt")
+        if s.get("bonus_on"):
+            print(f"Bonuszeit an: {s['bonus_progress']} von {s['bonus_cards']} Karten bis +{s['bonus_minutes']:g} min"
+                  + (f" (bisher +{s['bonus_gained_minutes']:g} min)" if s["bonus_gained_minutes"] else ""))
             if s["target"]:
                 print(f"Zählt gerade: {s['target']} ({s['reason']})")
         fw = s.get("focused_window")

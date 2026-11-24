@@ -26,6 +26,7 @@ class Signals:
     players: list[Player] = field(default_factory=list)
     last_answer: float | None = None  # Unix-Sekunden der letzten Anki-Antwort
     cards_since_lock: int | None = None  # beantwortete Karten seit Beginn der Sperre
+    cards_since_bonus: int | None = None  # beantwortete Karten seit bonus_since (außerhalb der Sperre)
 
     @property
     def focused(self) -> Window | None:
@@ -45,6 +46,10 @@ class State:
     cards_done: int = 0  # beantwortete Karten in der aktuellen Sperre
     paused_until: float = 0.0
     unmonitored: float = 0.0  # Sekunden ohne Meldung der GNOME-Erweiterung (gesamt)
+    bonus_on: bool = False  # Bonuszeit durch freiwilliges Lernen an?
+    bonus_since: float = 0.0  # ab hier zählen Karten für Bonuszeit
+    bonus_cards: int = 0  # seitdem beantwortete Karten
+    bonus_rewards: int = 0  # seitdem gutgeschriebene Bonus-Pakete
 
     @classmethod
     def from_dict(cls, d: dict | None) -> "State":
@@ -105,11 +110,29 @@ class Engine:
 
     def unlock(self) -> list[tuple]:
         self.state.mode = "free"
+        self._restart_bonus(self.now)
         self.state.used = 0.0
         self.state.learned = 0.0
         self.state.cards_done = 0
         self.state.warned = False
         return [("unlocked",)]
+
+    def _restart_bonus(self, now: float) -> None:
+        self.state.bonus_since = now
+        self.state.bonus_cards = 0
+        self.state.bonus_rewards = 0
+
+    def set_bonus(self, now: float, on: bool) -> list[tuple]:
+        """Bonuszeit an/aus. Gezählt werden nur Karten ab dem Einschalten."""
+        if self.state.bonus_on == on:
+            return []
+        self.state.bonus_on = on
+        if on:
+            self._restart_bonus(now)
+        return [("bonus", on)]
+
+    def bonus_counting(self) -> bool:
+        return self.state.bonus_on and self.state.mode == "free"
 
     def pause(self, now: float, minutes: float) -> list[tuple]:
         """Pausiert das Zählen. Während einer Sperre nicht möglich."""
@@ -156,6 +179,16 @@ class Engine:
         if st.mode == "free" and st.paused_until and now >= st.paused_until:
             st.paused_until = 0.0
             events.append(("resumed",))
+        if self.bonus_counting() and sig.cards_since_bonus is not None:
+            st.bonus_cards = max(st.bonus_cards, sig.cards_since_bonus)
+            due = st.bonus_cards // self.cfg.bonus_cards
+            if due > st.bonus_rewards:
+                minutes = (due - st.bonus_rewards) * self.cfg.bonus_minutes
+                st.bonus_rewards = due
+                st.used -= minutes * 60  # kann unter 0 gehen: dann mehr als allowed_minutes übrig
+                if self.cfg.allowed_seconds - st.used > self.cfg.warn_seconds:
+                    st.warned = False
+                events.append(("bonus_gained", minutes))
         if st.mode == "free" and self.is_paused(now):
             self.learning_active = False
             self.activity = Activity()
@@ -201,6 +234,11 @@ class Engine:
             "allowed": self.cfg.allowed_seconds,
             "used": round(st.used, 1),
             "remaining": round(max(0.0, self.cfg.allowed_seconds - st.used), 1),
+            "bonus_on": st.bonus_on,
+            "bonus_cards": self.cfg.bonus_cards,
+            "bonus_minutes": self.cfg.bonus_minutes,
+            "bonus_progress": st.bonus_cards % self.cfg.bonus_cards,
+            "bonus_gained_minutes": st.bonus_rewards * self.cfg.bonus_minutes,
             "learn_required": self.cfg.learn_seconds,
             "learned": round(st.learned, 1),
             "learn_remaining": round(max(0.0, self.cfg.learn_seconds - st.learned), 1),

@@ -240,3 +240,43 @@ def test_anki_activity_when_anki_locks_database(tmp_path):
     anki.close()
     # Anki zu: wieder direkt lesen
     assert act.poll(t0 + 100, t0)[1] == 2 and act.mode == "direkt"
+
+
+def test_bonus_time_for_voluntary_cards():
+    e = Engine(cfg_with(bonus_cards=10, bonus_minutes=5))
+    run(e, Signals(windows=[FF_YT]), 600, start=0)  # 10 min geschaut
+    # aus: Karten bringen nichts
+    e.tick(600, 1, Signals(windows=[ANKI], cards_since_bonus=30))
+    assert e.state.used == 600
+    assert e.set_bonus(601, True) == [("bonus", True)]
+    e.tick(602, 1, Signals(windows=[ANKI], cards_since_bonus=9))
+    assert e.state.used == 600
+    ev = e.tick(603, 1, Signals(windows=[ANKI], cards_since_bonus=10))
+    assert ev == [("bonus_gained", 5)] and e.state.used == 300
+    e.tick(604, 1, Signals(windows=[ANKI], cards_since_bonus=10))  # nicht doppelt
+    assert e.state.used == 300
+    ev = e.tick(605, 1, Signals(windows=[ANKI], cards_since_bonus=31))  # zwei Pakete auf einmal
+    assert ev == [("bonus_gained", 10)] and e.state.used == -300
+    snap = e.snapshot()
+    assert snap["remaining"] == 20 * 60 + 300 and snap["bonus_progress"] == 1 and snap["bonus_gained_minutes"] == 15
+
+
+def test_bonus_not_during_lock_and_restarts_after_unlock():
+    e = Engine(cfg_with(bonus_cards=10, bonus_minutes=5))
+    e.set_bonus(0, True)
+    e.lock(10)
+    e.tick(11, 1, Signals(windows=[ANKI], cards_since_bonus=50, cards_since_lock=0))
+    assert e.state.bonus_rewards == 0  # Karten in der Sperre zählen fürs Entsperren, nicht als Bonus
+    run(e, Signals(windows=[ANKI]), 5 * 60 + 5, start=20, last_answer_fn=lambda n: n)
+    assert e.state.mode == "free" and e.state.bonus_since >= 20 and e.state.bonus_cards == 0
+    e.set_bonus(400, False)
+    e.tick(401, 1, Signals(windows=[ANKI], cards_since_bonus=10))
+    assert e.state.used == 0
+
+
+def test_bonus_options_in_config():
+    cfg = parse_config(DEFAULT_CONFIG)
+    assert cfg.bonus_cards == 10 and cfg.bonus_minutes == 5
+    from lernsperre.config import add_missing_options
+    old = 'allowed_minutes = 10\n\n[[targets]]\nname = "YouTube"\ntitles = ["YouTube"]\n'
+    assert "bonus_cards = 10" in add_missing_options(old)

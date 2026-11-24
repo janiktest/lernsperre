@@ -33,6 +33,7 @@ IFACE_XML = f"""
     <method name="Reload"/>
     <method name="Pause"><arg type="u" name="minutes" direction="in"/></method>
     <method name="Resume"/>
+    <method name="SetBonus"><arg type="b" name="on" direction="in"/></method>
     <method name="Quit"/>
     <signal name="StateChanged"><arg type="s" name="state_json"/></signal>
   </interface>
@@ -58,6 +59,7 @@ class Service:
         self.last_answer: float | None = None
         self.last_answer_at = 0.0
         self.cards_since_lock: int | None = None
+        self.cards_since_bonus: int | None = None
         self.config_mtime = self._config_mtime()
         self.config_error = ""
         self.last_mono = time.monotonic()
@@ -157,6 +159,10 @@ class Service:
                     invocation.return_dbus_error(f"{IFACE}.Error", "Während einer Sperre geht Pausieren nicht")
                     return
                 self._handle(events)
+                invocation.return_value(None)
+            elif method == "SetBonus":
+                (on,) = params.unpack()
+                self._handle(self.engine.set_bonus(time.time(), bool(on)))
                 invocation.return_value(None)
             elif method == "Resume":
                 self._handle(self.engine.resume())
@@ -272,7 +278,7 @@ class Service:
         windows = self.windows if now - self.windows_at <= WINDOWS_STALE_AFTER else None
         return Signals(
             windows=windows, players=self.players, last_answer=self.last_answer,
-            cards_since_lock=self.cards_since_lock,
+            cards_since_lock=self.cards_since_lock, cards_since_bonus=self.cards_since_bonus,
         )
 
     def _tick(self) -> bool:
@@ -289,8 +295,13 @@ class Service:
                 # jede Sekunde; kopiert/gelesen wird nur, wenn Anki etwas geschrieben hat
                 self.last_answer, self.cards_since_lock = self.anki.poll(now, self.engine.state.lock_started)
                 self.last_answer_at = now
-            elif self.engine.state.mode != "locked":
+                self.cards_since_bonus = None
+            elif self.engine.bonus_counting():
+                # Bonuszeit an: auch außerhalb der Sperre Antworten zählen
+                self.last_answer, self.cards_since_bonus = self.anki.poll(now, self.engine.state.bonus_since)
                 self.cards_since_lock = None
+            else:
+                self.cards_since_lock = self.cards_since_bonus = None
             self._handle(self.engine.tick(now, dt, self._signals(now)))
             self.ticks += 1
             if self.ticks % 10 == 0:
@@ -314,8 +325,19 @@ class Service:
                 if self.cfg.pause_media_on_lock:
                     self._pause_players()
             elif kind == "unlocked":
-                self.anki.cleanup()
+                self.cards_since_bonus = None
+                if not self.engine.state.bonus_on:
+                    self.anki.cleanup()
                 self._notify("Entsperrt", "Gut gemacht! Die erlaubte Zeit beginnt von vorn.")
+            elif kind == "bonus":
+                if ev[1]:
+                    c = self.cfg
+                    self._notify("Bonuszeit an", f"Je {c.bonus_cards} Karten in Anki bringen {c.bonus_minutes:g} min mehr.")
+                else:
+                    self.cards_since_bonus = None
+                    self.anki.cleanup()
+            elif kind == "bonus_gained":
+                self._notify("Bonuszeit", f"+{ev[1]:g} min, gut gelernt! Noch {int(self.engine.snapshot()['remaining'] // 60)} min erlaubt.")
             elif kind == "pause_media":
                 self._pause_players()
             elif kind == "paused":

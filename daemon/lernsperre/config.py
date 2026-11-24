@@ -44,6 +44,14 @@ idle_seconds = 60
 # Während der Sperre laufende Wiedergabe (Video/Musik) pausieren
 pause_media_on_lock = true
 
+# --- Bonuszeit durch freiwilliges Lernen ------------------------------------
+
+# Wird im Panel-Menü an- und ausgeschaltet („Bonuszeit durch Lernen“).
+# Ist sie an, bringen je bonus_cards beantwortete Karten außerhalb einer
+# Sperre bonus_minutes mehr erlaubte Zeit.
+bonus_cards = 10       # so viele Karten ...
+bonus_minutes = 5      # ... bringen so viele Minuten
+
 # --- Pausieren ---------------------------------------------------------------
 
 # Auswahl im Menü „Pausieren“ (Minuten). Während einer Sperre geht Pausieren nicht.
@@ -138,6 +146,8 @@ class Config:
     icon_learning: str = "▶"
     icon_learning_paused: str = "⏸"
     show_time: bool = True
+    bonus_cards: int = 10
+    bonus_minutes: float = 5
     editor: str = ""
     anki_app_ids: list[str] = field(default_factory=lambda: ["net.ankiweb.Anki", "anki"])
     anki_desktop_id: str = "net.ankiweb.Anki.desktop"
@@ -177,7 +187,7 @@ def parse_config(text: str) -> Config:
         "allowed_minutes", "learn_minutes", "warn_seconds", "idle_seconds",
         "pause_media_on_lock", "pause_minutes",
         "icon_free", "icon_locked", "icon_paused", "icon_learning",
-        "icon_learning_paused", "show_time", "editor",
+        "icon_learning_paused", "show_time", "editor", "bonus_cards", "bonus_minutes",
         "anki_app_ids", "anki_desktop_id", "anki_collection", "anki_launch",
     ):
         if key in raw:
@@ -187,6 +197,8 @@ def parse_config(text: str) -> Config:
     cfg.min_cards = max(1, int(raw["min_cards"])) if "min_cards" in raw else None
     if cfg.learn_minutes is None and cfg.min_cards is None:
         cfg.learn_minutes = 5.0
+    cfg.bonus_cards = max(1, int(cfg.bonus_cards))
+    cfg.bonus_minutes = max(0.0, float(cfg.bonus_minutes))
     cfg.pause_minutes = [int(m) for m in cfg.pause_minutes if int(m) > 0]
     return cfg
 

@@ -32,6 +32,7 @@ const IFACE_XML = `
     <method name="Reload"/>
     <method name="Pause"><arg type="u" name="minutes" direction="in"/></method>
     <method name="Resume"/>
+    <method name="SetBonus"><arg type="b" name="on" direction="in"/></method>
     <method name="Quit"/>
     <signal name="StateChanged"><arg type="s" name="state_json"/></signal>
   </interface>
@@ -217,6 +218,8 @@ export default class LernSperreExtension extends Extension {
                 ? `Zählt gerade: ${s.target} (${s.reason}) – noch ${fmt(s.remaining)}`
                 : `Noch ${fmt(s.remaining)} von ${fmt(s.allowed)} erlaubt`;
         }
+        if (s?.bonus_on && !locked)
+            this._statusItem.label.text += `\nBonuszeit: ${s.bonus_progress} von ${s.bonus_cards} Karten bis +${s.bonus_minutes} min`;
         if (s?.config_error)
             this._statusItem.label.text += `\n⚠ ${s.config_error}`;
         this._updateMenu(s, locked);
@@ -258,6 +261,11 @@ export default class LernSperreExtension extends Extension {
         this._resumeItem.visible = running && !!s?.paused;
         this._quitItem.visible = running && !locked;
         this._startItem.visible = !running;
+        this._bonusItem.visible = running && s.bonus_on !== undefined;
+        if (running && s.bonus_on !== undefined) {
+            this._bonusItem.setToggleState(!!s.bonus_on);
+            this._bonusItem.label.text = `Bonuszeit durch Lernen (${s.bonus_cards} Karten = ${s.bonus_minutes} min)`;
+        }
 
         const key = JSON.stringify(s?.pause_minutes ?? []);
         if (running && key !== this._pauseKey) {
@@ -360,6 +368,10 @@ export default class LernSperreExtension extends Extension {
         this._resumeItem = new PopupMenu.PopupMenuItem('Pause beenden');
         this._resumeItem.connect('activate', () => this._proxy?.ResumeRemote(() => {}));
         this._indicator.menu.addMenuItem(this._resumeItem);
+
+        this._bonusItem = new PopupMenu.PopupSwitchMenuItem('Bonuszeit durch Lernen', false);
+        this._bonusItem.connect('toggled', (_item, on) => this._proxy?.SetBonusRemote(on, () => {}));
+        this._indicator.menu.addMenuItem(this._bonusItem);
 
         this._resetItem = new PopupMenu.PopupMenuItem('Zähler zurücksetzen');
         this._resetItem.connect('activate', () => this._proxy?.ResetRemote(() => {}));

@@ -49,6 +49,7 @@ Die Emojis kannst du in den Einstellungen ändern.
 | Sperre jetzt aktivieren | sperrt sofort, z. B. wenn du gleich lernen willst |
 | Pausieren ▸ 15 / 30 / 60 Minuten | in dieser Zeit wird nichts gezählt (nicht während einer Sperre) |
 | Pause beenden | zählt sofort wieder |
+| Bonuszeit durch Lernen | Schalter: Ist er an, bringen freiwillig beantwortete Karten mehr erlaubte Zeit (siehe unten) |
 | Zähler zurücksetzen | die erlaubte Zeit beginnt von vorn |
 | Einstellungen | öffnet die Einstellungsdatei im Texteditor |
 | Anleitung | diese Seite |
@@ -102,6 +103,12 @@ Gezählt wird nur, was nach Beginn der Sperre beantwortet wurde. LernSperre lies
 
 Während einer Sperre prüft LernSperre jede Sekunde. Solange die Anki-Desktop-App offen ist, sperrt sie ihre Datenbank. Dann kopiert LernSperre sie nach `~/.cache/lernsperre` (die große Datei einmal, die kleine `collection.anki2-wal` bei jeder Änderung) und liest die Kopie. Dort stehen auch deine neuesten Antworten, denn Anki schreibt jede Antwort zuerst in die WAL-Datei. Die Kopie wird nur gelesen, nie zurückgeschrieben und nach der Sperre gelöscht. Ankis Dateien und die Synchronisierung bleiben unberührt.
 
+### Bonuszeit durch freiwilliges Lernen
+
+Im Menü gibt es den Schalter **„Bonuszeit durch Lernen“** (oder `lernsperre bonus an` / `aus`). Ist er an, bringen je `bonus_cards` Karten (Standard 10), die du außerhalb einer Sperre in Anki beantwortest, `bonus_minutes` (Standard 5) mehr erlaubte Zeit. Es zählen nur Karten ab dem Einschalten bzw. ab dem letzten Entsperren. Die Restzeit kann dadurch auch über `allowed_minutes` steigen. Den Fortschritt zeigt die erste Zeile im Menü.
+
+Nur solange der Schalter an ist, liest LernSperre auch außerhalb einer Sperre in Anki mit (über die Kopie in `~/.cache/lernsperre`). Ist er aus, passiert das nur während einer Sperre.
+
 ### Notfall
 
 Unten auf dem Overlay ist **„Notfall: Sperre aufheben“**. Zweimal klicken hebt die Sperre auf, z. B. wenn Anki nicht startet. Ohne Overlay geht im Terminal `lernsperre reset`.
@@ -121,6 +128,8 @@ Menü → **Einstellungen** öffnet `~/.config/lernsperre/config.toml` im Texted
 | `idle_seconds` | `60` | Lernzeit wartet, wenn so lange keine Karte beantwortet wurde |
 | `pause_media_on_lock` | `true` | Wiedergabe bei der Sperre pausieren |
 | `pause_minutes` | `[15, 30, 60]` | Auswahl im Menü „Pausieren“ |
+| `bonus_cards` | `10` | so viele Karten bringen Bonuszeit (wenn der Schalter an ist) |
+| `bonus_minutes` | `5` | so viele Minuten Bonuszeit |
 | `icon_free` | `"⏳"` | Panel-Emoji normal |
 | `icon_locked` | `"🔒"` | Panel-Emoji bei Sperre |
 | `icon_paused` | `"☕"` | Panel-Emoji bei Pause |
@@ -200,6 +209,7 @@ lernsperre status          verbleibende Zeit, was gerade zählt, Sperre
 lernsperre lock            Sperre jetzt aktivieren
 lernsperre pause [MIN]     MIN Minuten pausieren (Standard 30, nicht während einer Sperre)
 lernsperre resume          Pause beenden
+lernsperre bonus an|aus    Bonuszeit durch freiwilliges Lernen an- oder ausschalten
 lernsperre reset           Zähler zurücksetzen bzw. Sperre aufheben (Notfall)
 lernsperre edit            Einstellungen im Texteditor öffnen
 lernsperre detect-ankis    alle Anki-Installationen suchen
