@@ -6,6 +6,7 @@ cmds=(
   'lock:Sperre jetzt aktivieren'
   'pause:Zählen pausieren (Minuten)'
   'resume:Pause beenden'
+  'bonus:Bonuszeit durch Lernen an/aus'
   'reset:Zähler zurücksetzen / Sperre aufheben'
   'edit:Einstellungen im Texteditor öffnen'
   'config:Pfad der Einstellungsdatei'
@@ -23,6 +24,8 @@ if (( CURRENT == 2 )); then
   _describe 'Befehl' cmds
 elif [[ $words[2] == pause ]]; then
   _values 'Minuten' 15 30 60
+elif [[ $words[2] == bonus ]]; then
+  _values 'Bonuszeit' an aus
 elif [[ $words[2] == reset-config ]]; then
   _values 'Option' '--behalten[deine Werte und Ziele behalten]'
 fi

@@ -9,6 +9,7 @@ Sperrt YouTube, Instagram & Co. nach einer einstellbaren Zeit, bis du in Anki ge
 - Zählt die Zeit, wenn YouTube, Instagram, TikTok, Netflix, Reddit oder X vorne sind oder dort gerade etwas läuft. Die Ziele sind frei einstellbar.
 - Nach der erlaubten Zeit (Standard 20 min) sperrt ein Vollbild-Overlay alles außer Anki.
 - Entsperrt wird nach einer Lernzeit (Standard 5 min) oder einer Anzahl Karten in Anki. Danach beginnt die Zeit von vorn.
+- Auf Wunsch (Schalter im Menü) bringt freiwilliges Lernen Bonuszeit, Standard 10 Karten = 5 min.
 - Restzeit und Menü (Pausieren, Einstellungen, Beenden …) oben rechts in der Leiste.
 
 ## Installieren

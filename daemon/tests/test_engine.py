@@ -240,3 +240,74 @@ def test_anki_activity_when_anki_locks_database(tmp_path):
     anki.close()
     # Anki zu: wieder direkt lesen
     assert act.poll(t0 + 100, t0)[1] == 2 and act.mode == "direkt"
+
+
+def test_bonus_time_for_voluntary_cards():
+    e = Engine(cfg_with(bonus_cards=10, bonus_minutes=5))
+    run(e, Signals(windows=[FF_YT]), 600, start=0)  # 10 min geschaut
+    # aus: Karten bringen nichts
+    e.tick(600, 1, Signals(windows=[ANKI], cards_since_bonus=30))
+    assert e.state.used == 600
+    assert e.set_bonus(601, True) == [("bonus", True)]
+    e.tick(602, 1, Signals(windows=[ANKI], cards_since_bonus=9))
+    assert e.state.used == 600
+    ev = e.tick(603, 1, Signals(windows=[ANKI], cards_since_bonus=10))
+    assert ev == [("bonus_gained", 5)] and e.state.used == 300
+    e.tick(604, 1, Signals(windows=[ANKI], cards_since_bonus=10))  # nicht doppelt
+    assert e.state.used == 300
+    ev = e.tick(605, 1, Signals(windows=[ANKI], cards_since_bonus=31))  # zwei Pakete auf einmal
+    assert ev == [("bonus_gained", 10)] and e.state.used == -300
+    snap = e.snapshot()
+    assert snap["remaining"] == 20 * 60 + 300 and snap["bonus_progress"] == 1 and snap["bonus_gained_minutes"] == 15
+
+
+def test_bonus_not_during_lock_and_restarts_after_unlock():
+    e = Engine(cfg_with(bonus_cards=10, bonus_minutes=5))
+    e.set_bonus(0, True)
+    e.lock(10)
+    e.tick(11, 1, Signals(windows=[ANKI], cards_since_bonus=50, cards_since_lock=0))
+    assert e.state.bonus_rewards == 0  # Karten in der Sperre zählen fürs Entsperren, nicht als Bonus
+    run(e, Signals(windows=[ANKI]), 5 * 60 + 5, start=20, last_answer_fn=lambda n: n)
+    assert e.state.mode == "free" and e.state.bonus_since >= 20 and e.state.bonus_cards == 0
+    e.set_bonus(400, False)
+    e.tick(401, 1, Signals(windows=[ANKI], cards_since_bonus=10))
+    assert e.state.used == 0
+
+
+def test_bonus_options_in_config():
+    cfg = parse_config(DEFAULT_CONFIG)
+    assert cfg.bonus_cards == 10 and cfg.bonus_minutes == 5
+    from lernsperre.config import add_missing_options
+    old = 'allowed_minutes = 10\n\n[[targets]]\nname = "YouTube"\ntitles = ["YouTube"]\n'
+    assert "bonus_cards = 10" in add_missing_options(old)
+
+
+def test_bonus_stops_when_target_starts_and_refuses_while_running():
+    e = Engine(cfg_with(bonus_cards=10, bonus_minutes=5))
+    e.tick(0, 1, Signals(windows=[FF_YT]))
+    ev = e.set_bonus(1, True)
+    assert ev[0][0] == "bonus_refused" and "YouTube" in ev[0][1] and not e.state.bonus_on
+    e.tick(2, 1, Signals(windows=[ANKI]))
+    assert e.set_bonus(3, True) == [("bonus", True)]
+    # YouTube im Hintergrund abspielen beendet den Modus auch
+    yt_bg = Window(title="Musik – YouTube — Mozilla Firefox", app_id="firefox_firefox")
+    ff = Player("org.mpris.MediaPlayer2.firefox.instance_1_2", playing=True, desktop_entry="firefox", title="Musik")
+    ev = e.tick(4, 1, Signals(windows=[ANKI, yt_bg], players=[ff], cards_since_bonus=10))
+    assert ev[0][0] == "bonus_stopped" and "YouTube" in ev[0][1]
+    assert not e.state.bonus_on and e.state.bonus_rewards == 0  # keine Bonuszeit mehr gutgeschrieben
+
+
+def test_bonus_stops_on_lock_and_cannot_start_while_locked():
+    e = Engine(CFG)
+    e.set_bonus(0, True)
+    ev = e.lock(5)
+    assert ("locked",) in ev and any(k == "bonus_stopped" for k, *_ in ev) and not e.state.bonus_on
+    assert e.set_bonus(6, True)[0][0] == "bonus_refused"
+
+
+def test_bonus_also_stops_while_paused():
+    e = Engine(CFG)
+    e.set_bonus(0, True)
+    e.pause(1, 15)
+    ev = e.tick(2, 1, Signals(windows=[FF_YT]))
+    assert any(k == "bonus_stopped" for k, *_ in ev)
